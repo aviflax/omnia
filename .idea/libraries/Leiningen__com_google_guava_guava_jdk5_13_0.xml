@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="Leiningen: com.google.guava/guava-jdk5:13.0">
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.m2/repository/com/google/guava/guava-jdk5/13.0/guava-jdk5-13.0.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
