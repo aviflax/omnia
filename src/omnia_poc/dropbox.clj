@@ -14,6 +14,8 @@
   (let [app-info (DbxAppInfo. (:key dropbox-info) (:secret dropbox-info))]
     (DbxWebAuthNoRedirect. (get-req-config) app-info)))
 
+(defn get-auth-init-url [auth] (.start auth))
+
 (defn get-token [auth code]
   (.accessToken (.finish auth code)))
 

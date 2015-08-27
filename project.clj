@@ -6,6 +6,10 @@
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [clucy "0.4.0"]
                  [com.dropbox.core/dropbox-core-sdk "[1.7,1.8)"]
+
+                 ; Google Drive Crap
+                 [com.google.api-client/google-api-client "1.20.0"]
+                 [com.google.oauth-client/google-oauth-client-jetty "1.20.0"]
                  [com.google.apis/google-api-services-drive "v2-rev182-1.20.0"]]
   :main omnia-poc.core
   :target-path "target/%s"
