@@ -1,5 +1,4 @@
 (ns omnia-poc.lucene
   (:require [clucy.core :as clucy]))
 
-(def index (clucy/memory-index))
-
+(def index (clucy/disk-index "data/lucene"))
