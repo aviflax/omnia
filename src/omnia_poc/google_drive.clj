@@ -15,12 +15,13 @@
            com.google.api.services.drive.Drive$Builder
            com.google.api.services.drive.DriveScopes
            java.util.ArrayList
-           (java.io ByteArrayOutputStream)))
+           (java.io ByteArrayOutputStream)
+           (com.google.api.client.auth.oauth2 BearerToken)))
 
 (def app-info {:name          "Omnia"
                :client-id     "759316558410-elh22itait533b8d1sahuq39b4g96und.apps.googleusercontent.com\nHere is your client secret\n***REMOVED***"
                :client-secret "***REMOVED***"
-               :token "ya29.2wHWKnZYou_BLljo8bLfnHIMUMd7X-T2_lsAiNnIOpeZTkmJ2557soDVztNnSq64crix"})
+               :token "ya29.4AEqVMRTjfgj_SZaG63oe1tNZenYjV8UobfKGDuC_AgrDnR-hOrbAaZITAYH8gtdplUI"})
 
 (def json-factory (JacksonFactory/getDefaultInstance))
 
@@ -39,35 +40,41 @@
 (defn get-auth-url [flow]
   (.newAuthorizationUrl flow))
 
-(defn get-creds [flow]
+(defn get-creds-via-browser [flow]
   (-> (AuthorizationCodeInstalledApp. flow (LocalServerReceiver.))
       (.authorize "user")))
 
-; Don’t actually need this but I just like to be able to get it
-(defn get-token [creds]
+(defn get-token
+  "get the token from the creds once it’s been authorized by the user in the browser"
+  [creds]
   (.getAccessToken creds))
 
-(defn get-service [creds]
-  (-> (Drive$Builder. http-transport json-factory creds)
+(defn get-creds [token]
+  (let [creds (Credential. (BearerToken/authorizationHeaderAccessMethod))]
+    (.setAccessToken creds token)
+    creds))
+
+(defn get-service []
+  (-> (Drive$Builder. http-transport json-factory (get-creds (:token app-info)))
       (.setApplicationName (:name app-info))
       .build))
 
-(defn get-file-content [id creds]
+(defn get-file-content [id]
   (let [stream (ByteArrayOutputStream.)]
-    (as-> (get-service creds) it
+    (as-> (get-service) it
           (.files it)
           (.get it id)
           (.executeMediaAndDownloadTo it stream))
     (str stream)))
 
-(defn get-file [id creds]
-  (as-> (get-service creds) it
+(defn get-file [id]
+  (as-> (get-service) it
         (.files it)
         (.get it id)
         (.execute it)))
 
-(defn get-files [creds]
-  (as-> (get-service creds) it
+(defn get-files []
+  (as-> (get-service) it
         (.files it)
         (.list it)
                   (.setMaxResults it (int 10))
@@ -76,6 +83,6 @@
         (.execute it)
         (.getItems it)
         (map #(hash-map :name (.getTitle %)
-                        :text (get-file-content (.getId %) creds)
+                        :text (get-file-content (.getId %))
                         :mime-type (.getMimeType %))
              it)))

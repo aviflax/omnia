@@ -8,8 +8,8 @@
   (doseq [file (dropbox/get-files path)]
     (clucy/add lucene/index file)))
 
-(defn index-google-drive-files [creds]
-  (doseq [file (google-drive/get-files creds)]
+(defn index-google-drive-files []
+  (doseq [file (google-drive/get-files)]
     (clucy/add lucene/index file)))
 
 (defn search [q]
