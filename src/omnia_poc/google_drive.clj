@@ -18,11 +18,6 @@
            (java.io ByteArrayOutputStream)
            (com.google.api.client.auth.oauth2 BearerToken)))
 
-(def app-info {:name          "Omnia"
-               :client-id     "759316558410-elh22itait533b8d1sahuq39b4g96und.apps.googleusercontent.com\nHere is your client secret\n***REMOVED***"
-               :client-secret "***REMOVED***"
-               :token "ya29.4AEqVMRTjfgj_SZaG63oe1tNZenYjV8UobfKGDuC_AgrDnR-hOrbAaZITAYH8gtdplUI"})
-
 (def json-factory (JacksonFactory/getDefaultInstance))
 
 (def http-transport (GoogleNetHttpTransport/newTrustedTransport))
@@ -54,27 +49,27 @@
     (.setAccessToken creds token)
     creds))
 
-(defn get-service []
-  (-> (Drive$Builder. http-transport json-factory (get-creds (:token app-info)))
-      (.setApplicationName (:name app-info))
+(defn get-service [{:keys [token name]}]
+  (-> (Drive$Builder. http-transport json-factory (get-creds token))
+      (.setApplicationName name)
       .build))
 
-(defn get-file-content [id]
+(defn get-file-content [id source]
   (let [stream (ByteArrayOutputStream.)]
-    (as-> (get-service) it
+    (as-> (get-service source) it
           (.files it)
           (.get it id)
           (.executeMediaAndDownloadTo it stream))
     (str stream)))
 
-(defn get-file [id]
-  (as-> (get-service) it
+(defn get-file [id source]
+  (as-> (get-service source) it
         (.files it)
         (.get it id)
         (.execute it)))
 
-(defn get-files []
-  (as-> (get-service) it
+(defn get-files [source]
+  (as-> (get-service source) it
         (.files it)
         (.list it)
                   (.setMaxResults it (int 10))
@@ -83,6 +78,6 @@
         (.execute it)
         (.getItems it)
         (map #(hash-map :name (.getTitle %)
-                        :text (get-file-content (.getId %))
+                        :text (get-file-content (.getId %) source)
                         :mime-type (.getMimeType %))
              it)))

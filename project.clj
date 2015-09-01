@@ -4,6 +4,7 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.7.0"]
+                 [com.datomic/datomic-free "0.9.5206"]
                  [clucy "0.4.0"]
                  [com.dropbox.core/dropbox-core-sdk "[1.7,1.8)"]
 
