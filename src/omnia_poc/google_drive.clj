@@ -39,18 +39,23 @@
   (-> (AuthorizationCodeInstalledApp. flow (LocalServerReceiver.))
       (.authorize "user")))
 
-(defn get-token
+(defn get-access-token
   "get the token from the creds once it’s been authorized by the user in the browser"
   [creds]
   (.getAccessToken creds))
+
+(defn get-refresh-token
+  "get the token from the creds once it’s been authorized by the user in the browser"
+  [creds]
+  (.getRefreshToken creds))
 
 (defn get-creds [token]
   (let [creds (Credential. (BearerToken/authorizationHeaderAccessMethod))]
     (.setAccessToken creds token)
     creds))
 
-(defn get-service [{:keys [token name]}]
-  (-> (Drive$Builder. http-transport json-factory (get-creds token))
+(defn get-service [{:keys [access-token name]}]
+  (-> (Drive$Builder. http-transport json-factory (get-creds access-token))
       (.setApplicationName name)
       .build))
 

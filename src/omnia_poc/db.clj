@@ -25,10 +25,16 @@
                      :db/doc "OAuth 2.0 Client Secret for this installation of Omnia"
                      :db.install/_attribute :db.part/db}
                     {:db/id (d/tempid :db.part/db)
-                     :db/ident :source/token
+                     :db/ident :source/access-token
                      :db/valueType :db.type/string
                      :db/cardinality :db.cardinality/one
                      :db/doc "OAuth 2.0 Access Token for this Source — TODO: move this to a source-account entity"
+                     :db.install/_attribute :db.part/db}
+                    {:db/id (d/tempid :db.part/db)
+                     :db/ident :source/refresh-token
+                     :db/valueType :db.type/string
+                     :db/cardinality :db.cardinality/one
+                     :db/doc "OAuth 2.0 Refresh Token for this Source — TODO: move this to a source-account entity"
                      :db.install/_attribute :db.part/db}
                     ])
 
@@ -51,3 +57,8 @@
 (defn get-source [name]
   (-> (d/pull (d/db (connect)) '[*] [:source/name name])
       remove-namespace-from-map-keys))
+
+(defn update-source-access-token [name token]
+  (d/transact (connect) [{:db/id [:source/name name]
+                          :source/access-token token}]))
+

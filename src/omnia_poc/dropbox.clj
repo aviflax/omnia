@@ -16,8 +16,8 @@
   (.accessToken (.finish auth code)))
 
 ; TODO: should this be reused?
-(defn get-client [{:keys [token]}]
-  (DbxClient. (get-req-config) token))
+(defn get-client [{:keys [access-token]}]
+  (DbxClient. (get-req-config) access-token))
 
 (defn get-file-content [path client]
   (let [stream (ByteArrayOutputStream.)]
