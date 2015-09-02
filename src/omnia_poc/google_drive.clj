@@ -1,6 +1,7 @@
 (ns omnia-poc.google-drive
   (:require [clojure.java.io :as io]
-            [clojure.pprint :as pprint])
+            [clojure.pprint :as pprint]
+            [omnia-poc.db :as db])
   (:import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
            com.google.api.client.auth.oauth2.Credential
            com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp
@@ -16,7 +17,9 @@
            com.google.api.services.drive.DriveScopes
            java.util.ArrayList
            (java.io ByteArrayOutputStream)
-           (com.google.api.client.auth.oauth2 BearerToken)))
+           (com.google.api.client.auth.oauth2 BearerToken)
+           (com.google.api.client.googleapis.json GoogleJsonResponseException)
+           (com.google.api.client.googleapis.auth.oauth2 GoogleRefreshTokenRequest)))
 
 (def json-factory (JacksonFactory/getDefaultInstance))
 
@@ -73,16 +76,36 @@
         (.get it id)
         (.execute it)))
 
+(defn refresh-token [service {:keys [client-id client-secret refresh-token]}]
+  (let [access-token (as-> (GoogleRefreshTokenRequest. http-transport json-factory
+                                                       refresh-token client-id client-secret) it
+                           (do (println it) it)
+                           (.execute it)
+                           (.getAccessToken it))]
+    (db/update-source-access-token "Google Drive" access-token)
+    (.setAccessToken service access-token)))
+
+(defn exec-with-refresh [req service]
+  (try
+    (.execute req)
+    (catch GoogleJsonResponseException e
+      (if (and (.getDetails e)
+               (= (.getCode (.getDetails e)) 401))
+          (do
+            (refresh-token service req)
+            (.execute req))
+          (throw e)))))
+
 (defn get-files [source]
-  (as-> (get-service source) it
-        (.files it)
+  (let [service (get-service source)]
+  (as-> (.files service) it
         (.list it)
-                  (.setMaxResults it (int 10))
-                  (.setOrderBy it "createdDate desc")
-                  (.setQ it "mimeType = 'text/plain'")
-        (.execute it)
+        (.setMaxResults it (int 10))
+        (.setOrderBy it "createdDate desc")
+        (.setQ it "mimeType = 'text/plain'")
+        (exec-with-refresh it service)
         (.getItems it)
         (map #(hash-map :name (.getTitle %)
                         :text (get-file-content (.getId %) source)
                         :mime-type (.getMimeType %))
-             it)))
+             it))))
