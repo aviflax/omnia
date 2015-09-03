@@ -1,111 +1,52 @@
 (ns omnia-poc.google-drive
-  (:require [clojure.java.io :as io]
-            [clojure.pprint :as pprint]
-            [omnia-poc.db :as db])
-  (:import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
-           com.google.api.client.auth.oauth2.Credential
-           com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp
-           com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver
-           com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow$Builder
-           com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets
-           com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
-           com.google.api.client.http.HttpTransport
-           com.google.api.client.json.jackson2.JacksonFactory
-           com.google.api.client.json.JsonFactory
-           com.google.api.client.util.store.FileDataStoreFactory
-           com.google.api.services.drive.Drive$Builder
-           com.google.api.services.drive.DriveScopes
-           java.util.ArrayList
-           (java.io ByteArrayOutputStream)
-           (com.google.api.client.auth.oauth2 BearerToken)
-           (com.google.api.client.googleapis.json GoogleJsonResponseException)
-           (com.google.api.client.googleapis.auth.oauth2 GoogleRefreshTokenRequest)))
+  (:require [omnia-poc.db :as db]
+            [clj-http.client :as client]))
 
-(def json-factory (JacksonFactory/getDefaultInstance))
+(defn get-access-token [{:keys [client-id client-secret refresh-token] :as source}]
+  (let [url "https://www.googleapis.com/oauth2/v3/token"
+        response (client/post url {:form-params {:client_id client-id
+                                                 :client_secret client-secret
+                                                 :grant_type "refresh_token"
+                                                 :refresh_token refresh-token}
+                                   :as :json})]
+    ;(println response)
+    (get-in response [:body :access_token])))
 
-(def http-transport (GoogleNetHttpTransport/newTrustedTransport))
+(defn goget [url {:keys [access-token refresh-token] :as source} & [opts]]
+  ;; TODO: switch to try/catch and rethrow anything other than 401
+  ;; TODO: figure out a way to update the source that is being used in outer contexts
+  (let [response (client/get url (assoc opts :throw-exceptions false
+                                             :oauth-token access-token))]
+    (if (= (:status response) 401)
+        (let [token (get-access-token source)]
+          (println "got new access token" token " so updating source in DB")
+          (db/update-source-access-token "Google Drive" token)
+          (println "trying again with new access token" token)
+          (goget url (assoc source :access-token token) opts))
+        response)))
 
-(def secret-json "{\"installed\":{\"client_id\":\"759316558410-elh22itait533b8d1sahuq39b4g96und.apps.googleusercontent.com\",\"auth_uri\":\"https://accounts.google.com/o/oauth2/auth\",\"token_uri\":\"https://accounts.google.com/o/oauth2/token\",\"auth_provider_x509_cert_url\":\"https://www.googleapis.com/oauth2/v1/certs\",\"client_secret\":\"***REMOVED***\",\"redirect_uris\":[\"urn:ietf:wg:oauth:2.0:oob\",\"http://localhost\"]}}")
+(defn get-file-list [{:keys [access-token] :as source}]
+  (->> (goget "https://www.googleapis.com/drive/v2/files"
+              source
+              {:query-params {"maxResults" "10"
+                              "spaces" "drive"
+                              "q" "mimeType = 'text/plain'"}
+               :as :json})
+       :body
+       :items
+       (map (fn [file]
+              (assoc file :name (:title file)
+                          :mime-type (:mimeType file)
+                          :source (:name source))))))
 
-(def client-secrets (GoogleClientSecrets/load json-factory (io/reader (.getBytes secret-json))))
+(defn add-text [source file]
+  (let [response (goget (str "https://www.googleapis.com/drive/v2/files/" (:id file))
+                        source
+                        {:query-params {"alt" "media"}
+                         :as :stream})
+        text (slurp (:body response))]
+    (assoc file :text text)))
 
-(def scopes (ArrayList. [DriveScopes/DRIVE]))
-
-(defn flow [] (-> (GoogleAuthorizationCodeFlow$Builder. http-transport json-factory client-secrets scopes)
-                  (.setAccessType "offline")
-                  (.build)))
-
-(defn get-auth-url [flow]
-  (.newAuthorizationUrl flow))
-
-(defn get-creds-via-browser [flow]
-  (-> (AuthorizationCodeInstalledApp. flow (LocalServerReceiver.))
-      (.authorize "user")))
-
-(defn get-access-token
-  "get the token from the creds once it’s been authorized by the user in the browser"
-  [creds]
-  (.getAccessToken creds))
-
-(defn get-refresh-token
-  "get the token from the creds once it’s been authorized by the user in the browser"
-  [creds]
-  (.getRefreshToken creds))
-
-(defn get-creds [token]
-  (let [creds (Credential. (BearerToken/authorizationHeaderAccessMethod))]
-    (.setAccessToken creds token)
-    creds))
-
-(defn get-service [{:keys [access-token name]}]
-  (-> (Drive$Builder. http-transport json-factory (get-creds access-token))
-      (.setApplicationName name)
-      .build))
-
-(defn get-file-content [id source]
-  (let [stream (ByteArrayOutputStream.)]
-    (as-> (get-service source) it
-          (.files it)
-          (.get it id)
-          (.executeMediaAndDownloadTo it stream))
-    (str stream)))
-
-(defn get-file [id source]
-  (as-> (get-service source) it
-        (.files it)
-        (.get it id)
-        (.execute it)))
-
-(defn refresh-token [service {:keys [client-id client-secret refresh-token]}]
-  (let [access-token (as-> (GoogleRefreshTokenRequest. http-transport json-factory
-                                                       refresh-token client-id client-secret) it
-                           (do (println it) it)
-                           (.execute it)
-                           (.getAccessToken it))]
-    (db/update-source-access-token "Google Drive" access-token)
-    (.setAccessToken service access-token)))
-
-(defn exec-with-refresh [req service]
-  (try
-    (.execute req)
-    (catch GoogleJsonResponseException e
-      (if (and (.getDetails e)
-               (= (.getCode (.getDetails e)) 401))
-          (do
-            (refresh-token service req)
-            (.execute req))
-          (throw e)))))
-
-(defn get-files [source]
-  (let [service (get-service source)]
-  (as-> (.files service) it
-        (.list it)
-        (.setMaxResults it (int 10))
-        (.setOrderBy it "createdDate desc")
-        (.setQ it "mimeType = 'text/plain'")
-        (exec-with-refresh it service)
-        (.getItems it)
-        (map #(hash-map :name (.getTitle %)
-                        :text (get-file-content (.getId %) source)
-                        :mime-type (.getMimeType %))
-             it))))
+(defn get-files [{:keys [access-token] :as source}]
+  (as-> (get-file-list source) files
+        (map (partial add-text source) files)))

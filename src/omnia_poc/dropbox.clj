@@ -31,5 +31,6 @@
           (.children it)
           (filter #(.isFile %) it)
           (map #(hash-map :name (.name %)
-                          :text (get-file-content (.path %) client))
+                          :text (get-file-content (.path %) client)
+                          :source (:name source))
                it))))
