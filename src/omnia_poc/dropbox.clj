@@ -38,24 +38,13 @@
         (assoc f :text (get-file-content (.path file) client))
         f)))
 
-(defn get-files [path source]
-  (let [client (get-client source)]
-    (as-> client it
-          (.getMetadataWithChildren it path)
-          (.children it)
-          (filter #(.isFile %) it)
-          (map (partial dropbox-file->omnia-file-with-text client source) ; TODO: not sure map is appropriate in this case, because of get-file-content
-               it))))
-
 (defn process-delta-entry! [client source entry]
   (if (nil? (.metadata entry))
       (lucene/delete-file {:omnia-source (lower-case (:name source))
                            :omnia-source-id (lower-case (.lcPath entry))})
       (when (.isFile (.metadata entry))                     ; TODO: handle directories?
         (println (-> (.metadata entry) .path))
-        (let [file (dropbox-file->omnia-file-with-text client source (.metadata entry))]
-          (lucene/delete-file file)
-          (lucene/add-file file))
+        (lucene/add-or-update-file (dropbox-file->omnia-file-with-text client source (.metadata entry)))
         (Thread/sleep 10))))
 
 (defn synchronize [{:keys [sync-cursor] :as source}]
