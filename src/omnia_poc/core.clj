@@ -5,13 +5,19 @@
             [omnia-poc.lucene :as lucene]
             [clucy.core :as clucy]))
 
+(defn fix-meta [file]
+  (with-meta file {:omnia-source-id {:analyzed false :norms false}
+                   :omnia-source {:analyzed false :norms false}}))
+
 (defn index-dropbox-files []
   (doseq [file (dropbox/get-files "/" (db/get-source "Dropbox"))]
-    (clucy/add lucene/index file)))
+    (clucy/delete lucene/index (select-keys file [:omnia-source :omnia-source-id]))
+    (clucy/add lucene/index (fix-meta file))))
 
 (defn index-google-drive-files []
   (doseq [file (google-drive/get-files (db/get-source "Google Drive"))]
-    (clucy/add lucene/index file)))
+    (clucy/delete lucene/index (select-keys file [:omnia-source :omnia-source-id]))
+    (clucy/add lucene/index (fix-meta file))))
 
 (defn search [q]
   (clucy/search lucene/index q 10))

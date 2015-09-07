@@ -1,5 +1,6 @@
 (ns omnia-poc.google-drive
   (:require [omnia-poc.db :as db]
+            [clojure.string :refer [lower-case]]
             [clj-http.client :as client]))
 
 (defn get-access-token [{:keys [client-id client-secret refresh-token] :as source}]
@@ -24,6 +25,12 @@
           (goget url (assoc source :access-token token) opts))
         response)))
 
+(defn gdrive-file->omnia-file [source file]
+  (assoc file :name (:title file)
+              :mime-type (:mimeType file)
+              :omnia-source-id (lower-case (:id file))      ; lower-case to work around a bug in clucy
+              :omnia-source (lower-case (:name source))))   ; lower-case to work around a bug in clucy
+
 (defn get-file-list [{:keys [access-token] :as source}]
   (->> (goget "https://www.googleapis.com/drive/v2/files"
               source
@@ -33,10 +40,7 @@
                :as :json})
        :body
        :items
-       (map (fn [file]
-              (assoc file :name (:title file)
-                          :mime-type (:mimeType file)
-                          :source (:name source))))))
+       (map (partial gdrive-file->omnia-file source))))
 
 (defn add-text [source file]
   (let [response (goget (str "https://www.googleapis.com/drive/v2/files/" (:id file))
