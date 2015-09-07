@@ -1,5 +1,6 @@
 (ns omnia-poc.dropbox
-  (:require [omnia-poc.db :as db]
+  (:require [omnia-poc [db :as db]
+             [lucene :as lucene]]
             [clojure.string :refer [lower-case]])
   (:import [com.dropbox.core DbxAppInfo DbxRequestConfig DbxWebAuthNoRedirect DbxClient]
            java.util.Locale
@@ -26,12 +27,16 @@
     (.getFile client path nil stream)
     (str stream)))
 
-(defn dropbox-file->omnia-file
+(defn dropbox-file->omnia-file-with-text
   [client source file]
-  (hash-map :name (.name file)
-            :text (get-file-content (.path file) client)
-            :omnia-source-id (lower-case (.path file))      ; lower-case to work around a possible bug in clucy
-            :omnia-source (lower-case (:name source))))     ; lower-case to work around a possible bug in clucy
+  (let [f (hash-map :name (.name file)
+                    ; lower-case to work around a possible bug in clucy
+                    :omnia-source-id (lower-case (.path file))
+                    ; lower-case to work around a possible bug in clucy
+                    :omnia-source (lower-case (:name source)))]
+    (if (.endsWith (.path file) ".txt")                     ; TODO: make this much more sophisticated!
+        (assoc f :text (get-file-content (.path file) client))
+        f)))
 
 (defn get-files [path source]
   (let [client (get-client source)]
@@ -39,5 +44,30 @@
           (.getMetadataWithChildren it path)
           (.children it)
           (filter #(.isFile %) it)
-          (map (partial dropbox-file->omnia-file client source)
+          (map (partial dropbox-file->omnia-file-with-text client source) ; TODO: not sure map is appropriate in this case, because of get-file-content
                it))))
+
+(defn process-delta-entry! [client source entry]
+  (if (nil? (.metadata entry))
+      (lucene/delete-file {:omnia-source (lower-case (:name source))
+                           :omnia-source-id (lower-case (.lcPath entry))})
+      (when (.isFile (.metadata entry))                     ; TODO: handle directories?
+        (println (-> (.metadata entry) .path))
+        (let [file (dropbox-file->omnia-file-with-text client source (.metadata entry))]
+          (lucene/delete-file file)
+          (lucene/add-file file))
+        (Thread/sleep 10))))
+
+(defn synchronize [{:keys [sync-cursor] :as source}]
+  (let [client (get-client source)]
+    (loop [cursor sync-cursor]
+      (let [delta (.getDelta client cursor)]
+        (run! (partial process-delta-entry! client source)
+              (.entries delta))
+
+        ; update source cursor in DB
+        (db/update-source "Dropbox" :sync-cursor (.cursor delta))
+
+        ; get more
+        (when (.hasMore delta)
+          (recur (.cursor delta)))))))
