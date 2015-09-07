@@ -58,7 +58,6 @@
   (-> (d/pull (d/db (connect)) '[*] [:source/name name])
       remove-namespace-from-map-keys))
 
-(defn update-source-access-token [name token]
-  (d/transact (connect) [{:db/id [:source/name name]
-                          :source/access-token token}]))
-
+(defn update-source [source-name key value]
+  (d/transact (connect) [{:db/id [:source/name source-name]
+                          (keyword "source" (name key)) value}]))

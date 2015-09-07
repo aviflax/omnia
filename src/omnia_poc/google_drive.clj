@@ -9,7 +9,6 @@
                                                  :grant_type "refresh_token"
                                                  :refresh_token refresh-token}
                                    :as :json})]
-    ;(println response)
     (get-in response [:body :access_token])))
 
 (defn goget [url {:keys [access-token refresh-token] :as source} & [opts]]
@@ -20,7 +19,7 @@
     (if (= (:status response) 401)
         (let [token (get-access-token source)]
           (println "got new access token" token " so updating source in DB")
-          (db/update-source-access-token "Google Drive" token)
+          (db/update-source "Google Drive" :access-token token)
           (println "trying again with new access token" token)
           (goget url (assoc source :access-token token) opts))
         response)))
