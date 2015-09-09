@@ -1,9 +1,12 @@
 (ns omnia-poc.google-drive
   (:require [omnia-poc.db :as db]
-            [clojure.string :refer [lower-case]]
+            [omnia-poc.lucene :as lucene]
+            [clojure.string :refer [blank? lower-case]]
             [clj-http.client :as client]))
 
-(defn get-access-token [{:keys [client-id client-secret refresh-token] :as source}]
+(defn get-access-token
+  ^:private
+  [{:keys [client-id client-secret refresh-token] :as source}]
   (let [url "https://www.googleapis.com/oauth2/v3/token"
         response (client/post url {:form-params {:client_id client-id
                                                  :client_secret client-secret
@@ -12,7 +15,9 @@
                                    :as :json})]
     (get-in response [:body :access_token])))
 
-(defn goget [url {:keys [access-token refresh-token] :as source} & [opts]]
+(defn goget
+  ^:private
+  [url {:keys [access-token refresh-token] :as source} & [opts]]
   ;; TODO: switch to try/catch and rethrow anything other than 401
   ;; TODO: figure out a way to update the source that is being used in outer contexts
   (let [response (client/get url (assoc opts :throw-exceptions false
@@ -31,25 +36,51 @@
               :omnia-source-id (lower-case (:id file))      ; lower-case to work around a bug in clucy
               :omnia-source (lower-case (:name source))))   ; lower-case to work around a bug in clucy
 
-(defn get-file-list [{:keys [access-token] :as source}]
-  (->> (goget "https://www.googleapis.com/drive/v2/files"
-              source
-              {:query-params {"maxResults" "10"
-                              "spaces" "drive"
-                              "q" "mimeType = 'text/plain'"}
-               :as :json})
-       :body
-       :items
-       (map (partial gdrive-file->omnia-file source))))
+(defn add-text
+  "If the file’s mime type is text/plain, retrieves the text and adds it to the file map in :text.
+  Otherwise returns the file map as-is. TODO: move the filtering elsewhere."
+  [source file]
+  (if (not= (:mimeType file) "text/plain")
+      file
+      (let [response (goget (str "https://www.googleapis.com/drive/v2/files/" (:id file))
+                            source
+                            {:query-params {"alt" "media"}
+                             :as :stream})
+            text (slurp (:body response))]
+        (assoc file :text text))))
 
-(defn add-text [source file]
-  (let [response (goget (str "https://www.googleapis.com/drive/v2/files/" (:id file))
-                        source
-                        {:query-params {"alt" "media"}
-                         :as :stream})
-        text (slurp (:body response))]
-    (assoc file :text text)))
+(defn ^:private get-changes [source cursor]
+  (goget "https://www.googleapis.com/drive/v2/changes"
+         source
+         {:as :json
+          :query-params (if (blank? cursor)
+                            {}
+                            {"pageToken" (-> cursor bigint int inc)})}))
 
-(defn get-files [{:keys [access-token] :as source}]
-  (as-> (get-file-list source) files
-        (map (partial add-text source) files)))
+(defn process-change-item! [source item]
+  (if (:deleted item)
+      (lucene/delete-file {:omnia-source (lower-case (:name source))
+                           :omnia-source-id (lower-case (:fileId item))})
+      (let [file (:file item)]
+        (println (:title file))
+        (->> (gdrive-file->omnia-file source file)
+             (add-text source)
+             lucene/add-or-update-file)
+        (Thread/sleep 100))))
+
+(defn synchronize! [source]
+  (loop [cursor (:sync-cursor source)]
+    (let [response (get-changes source cursor)
+          changes (:body response)]
+      (when (not= (:status response) 200)
+        (throw (Exception. "ruh roh")))
+
+      (run! (partial process-change-item! source)
+            (:items changes))
+
+      ; update source cursor in DB
+      (db/update-source "Google Drive" :sync-cursor (str (:largestChangeId changes)))
+
+      ; get more
+      (when (not (blank? (:nextLink changes)))
+        (recur (:largestChangeId changes))))))
