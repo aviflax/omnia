@@ -7,8 +7,16 @@
                  [com.datomic/datomic-free "0.9.5206"]      ; not available on clojars or maven central; must be added to local maven repository cache thingy
                  [clucy "0.4.0"]
                  [com.dropbox.core/dropbox-core-sdk "1.7" :exclusions [com.fasterxml.jackson.core/jackson-core]]
+
+                 ; HTTP client stuff
                  [clj-http "2.0.0"]
                  [cheshire "5.5.0"]
+
+                 ; web UI stuff
+                 [ring/ring-core "1.4.0"]
+                 [ring/ring-jetty-adapter "1.4.0"]
+                 [compojure "1.4.0"]
+                 [hiccup "1.0.5"]
 
                  ; these deps are not used directly but I’m specifying them to address conflicts
                  [commons-codec "1.10"]
