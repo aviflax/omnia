@@ -30,6 +30,7 @@
 (defn dropbox-file->omnia-file-with-text
   [client source file]
   (let [f (hash-map :name (.name file)
+                    :path (.path file)
                     ; lower-case to work around a possible bug in clucy
                     :omnia-source-id (lower-case (.path file))
                     ; lower-case to work around a possible bug in clucy

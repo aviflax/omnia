@@ -47,6 +47,7 @@
                 [:h1
                  [:a {:href (link result)}
                   (:name result)]]
+                [:label.path (:path result)]
                 [:p.snippet (trunc (:text result) 100) "…"]
                 [:label.source "(" (as-> (:omnia-source result) it
                                          (split it #" ")

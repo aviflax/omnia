@@ -32,6 +32,7 @@
 
 (defn gdrive-file->omnia-file [source file]
   (assoc file :name (:title file)
+              :path nil ; TODO: add path, if not toooo much of a hassle
               :mime-type (:mimeType file)
               :omnia-source-id (lower-case (:id file))      ; lower-case to work around a bug in clucy
               :omnia-source (lower-case (:name source))))   ; lower-case to work around a bug in clucy
