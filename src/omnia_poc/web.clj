@@ -52,7 +52,8 @@
                 [:label.source "(" (as-> (:omnia-source result) it
                                          (split it #" ")
                                          (map capitalize it)
-                                         (join " " it)) ")"]])]])))
+                                         (join " " it)) ")"]
+                [:hr]])]])))
 
 (defroutes routes
            (GET "/" [] (handle-index))
