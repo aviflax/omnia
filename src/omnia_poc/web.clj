@@ -2,6 +2,7 @@
   (:require [ring.adapter.jetty :refer [run-jetty]]
             [compojure.core :refer [defroutes GET]]
             [ring.middleware.params :refer [wrap-params]]
+            [ring.middleware.stacktrace :refer [wrap-stacktrace]]
             [hiccup.page :refer [html5]]
             [hiccup.form :as f]
             [omnia-poc.core :refer [search]]
@@ -19,14 +20,16 @@
 
 (defn ^:private trunc
   [s n]
-  (subs s 0 (min (count s) n)))
+  (if (nil? s)
+      ""
+      (subs s 0 (min (count s) n))))
 
 (defn link [file]
   (if (contains? file :alternateLink)
       (:alternateLink file)
       (let [path-segments (split (:omnia-source-id file) #"/")
             dir-path (join "/" (butlast path-segments))]
-        (str "https://www.dropbox.com/home/" dir-path "?preview=" (last path-segments)))))
+        (str "https://www.dropbox.com/home" dir-path "?preview=" (last path-segments)))))
 
 (defn handle-search [query]
   (let [results (search query)]
@@ -55,7 +58,9 @@
            (GET "/search" [q] (handle-search q)))
 
 (def app
-  (wrap-params routes))
+  (-> routes
+      wrap-params
+      wrap-stacktrace))
 
 (defn start []
   (run-jetty app {:port 3000 :join? false}))
