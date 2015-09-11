@@ -5,6 +5,7 @@
 
 (defn delete-file [file]
   "If the file isn’t found, this is just a no-op"
+  (println "Deleting" (:name file) "from index, if present")
   (clucy/delete index (select-keys file [:omnia-source :omnia-source-id])))
 
 (defn fix-meta [file]
@@ -13,6 +14,7 @@
 
 (defn add-file [file]
   "Be careful not to accidentally add duplicate entries to the index with this."
+  (println "Indexing" (:name file) "from" (:omnia-source file))
   (clucy/add index (fix-meta file)))
 
 (defn add-or-update-file [file]
