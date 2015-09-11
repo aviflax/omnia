@@ -4,7 +4,8 @@
             [ring.middleware.params :refer [wrap-params]]
             [hiccup.page :refer [html5]]
             [hiccup.form :as f]
-            [omnia-poc.core :refer [search]]))
+            [omnia-poc.core :refer [search]]
+            [clojure.string :refer [capitalize join split]]))
 
 (defn handle-index []
   (html5 [:head
@@ -20,6 +21,13 @@
   [s n]
   (subs s 0 (min (count s) n)))
 
+(defn link [file]
+  (if (contains? file :alternateLink)
+      (:alternateLink file)
+      (let [path-segments (split (:omnia-source-id file) #"/")
+            dir-path (join "/" (butlast path-segments))]
+        (str "https://www.dropbox.com/home/" dir-path "?preview=" (last path-segments)))))
+
 (defn handle-search [query]
   (let [results (search query)]
     (html5 [:head
@@ -31,14 +39,16 @@
                         (f/text-field :q query)
                         (f/submit-button "Search"))]
             [:section#results
-
              (for [result results]
                [:section.result
-                [:h1 (:name result)]
+                [:h1
+                 [:a {:href (link result)}
+                  (:name result)]]
                 [:p.snippet (trunc (:text result) 100) "…"]
-                ])
-             ]
-            ])))
+                [:label.source "(" (as-> (:omnia-source result) it
+                                         (split it #" ")
+                                         (map capitalize it)
+                                         (join " " it)) ")"]])]])))
 
 (defroutes routes
            (GET "/" [] (handle-index))
