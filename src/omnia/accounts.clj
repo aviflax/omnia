@@ -24,7 +24,7 @@
 (def executor (ScheduledThreadPoolExecutor. 5))
 (def tasks (atom []))
 
-(defn start-syncing []
+(defn start-syncing [interval-secs]
   (doseq [account (db/get-accounts "avi@aviflax.com")]
     (let [task (.scheduleAtFixedRate
                  executor
@@ -35,7 +35,7 @@
                           (println "caught exception: " e)))
                       (println "synced" (-> account :type :name)))
                  0
-                 5
+                 interval-secs
                  TimeUnit/SECONDS)]
       (swap! tasks conj task))))
 
