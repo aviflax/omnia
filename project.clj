@@ -22,7 +22,7 @@
                  ; these deps are not used directly but I’m specifying them to address conflicts
                  [commons-codec "1.10"]
                  [joda-time "2.8.2"]]
-  :main omnia-poc.core
+  :main omnia.core
   :target-path "target/%s"
   :profiles {:dev {:dependencies [[cursive/datomic-stubs "0.9.5153" :scope "provided"]]}
              :uberjar {:aot :all}})

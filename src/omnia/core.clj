@@ -1,5 +1,5 @@
-(ns omnia-poc.core
-  (:require [omnia-poc
+(ns omnia.core
+  (:require [omnia
              [lucene :as lucene]
              [db :as db]
              [accounts :as accounts]]

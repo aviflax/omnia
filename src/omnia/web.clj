@@ -1,11 +1,11 @@
-(ns omnia-poc.web
+(ns omnia.web
   (:require [ring.adapter.jetty :refer [run-jetty]]
             [compojure.core :refer [defroutes GET]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.stacktrace :refer [wrap-stacktrace]]
             [hiccup.page :refer [html5]]
             [hiccup.form :as f]
-            [omnia-poc.lucene :as index]
+            [omnia.lucene :as index]
             [clojure.string :refer [capitalize join split]]))
 
 (defn handle-index []

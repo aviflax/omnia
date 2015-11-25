@@ -1,5 +1,5 @@
-(ns omnia-poc.accounts
-  (:require [omnia-poc
+(ns omnia.accounts
+  (:require [omnia
              [dropbox :as dropbox]
              [google-drive :as gdrive]
              [lucene :as index]

@@ -1,4 +1,4 @@
-(ns omnia-poc.db
+(ns omnia.db
   (require [datomic.api :as d]))
 
 (def ^:private uri "datomic:free://localhost:4334/omnia")   ;; TODO: move to config

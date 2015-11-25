@@ -1,12 +1,13 @@
-(ns omnia-poc.google-drive
+(ns omnia.google-drive
   "If might seem odd that this ns uses GDrive’s REST API directly via HTTP
    rather than employing GDrive’s Java SDK that should hypothetically provide
    a more convenient way to integrate with GDrive, similar to the Dropbox case.
    The reason is that GDrive’s Java SDK is an unusable piece of crap. It’s classic
    awful Java: millions of classes and factories and builders and awful docs on
    how to actually *use* all that crap."
-  (:require [omnia-poc.db :as db]
-            [omnia-poc.lucene :as lucene]
+  (:require [omnia
+             [db :as db]
+             [lucene :as lucene]]
             [clojure.string :refer [blank? lower-case]]
             [clj-http.client :as client]))
 

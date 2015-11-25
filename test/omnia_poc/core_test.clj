@@ -1,6 +1,6 @@
-(ns omnia-poc.core-test
+(ns omnia.core-test
   (:require [clojure.test :refer :all]
-            [omnia-poc.core :refer :all]))
+            [omnia.core :refer :all]))
 
 (deftest a-test
   (testing "FIXME, I fail."
