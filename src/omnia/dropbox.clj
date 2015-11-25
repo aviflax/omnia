@@ -1,6 +1,6 @@
 (ns omnia.dropbox
   (:require [omnia [db :as db]
-             [lucene :as lucene]]
+             [index :as lucene]]
             [clojure.string :refer [lower-case]])
   (:import [com.dropbox.core DbxAppInfo DbxRequestConfig DbxWebAuthNoRedirect DbxClient]
            java.util.Locale

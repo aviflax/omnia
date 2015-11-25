@@ -2,7 +2,7 @@
   (:require [omnia
              [dropbox :as dropbox]
              [google-drive :as gdrive]
-             [lucene :as index]
+             [index :as index]
              [db :as db]]))
 
 (defmulti synch (fn [account] (-> account :type :name)))

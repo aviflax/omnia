@@ -1,6 +1,6 @@
 (ns omnia.core
   (:require [omnia
-             [lucene :as lucene]
+             [index :as lucene]
              [db :as db]
              [accounts :as accounts]]
             [clucy.core :as clucy])

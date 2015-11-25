@@ -5,7 +5,7 @@
             [ring.middleware.stacktrace :refer [wrap-stacktrace]]
             [hiccup.page :refer [html5]]
             [hiccup.form :as f]
-            [omnia.lucene :as index]
+            [omnia.index :as index]
             [clojure.string :refer [capitalize join split]]))
 
 (defn handle-index []

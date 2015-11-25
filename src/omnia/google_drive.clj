@@ -7,7 +7,7 @@
    how to actually *use* all that crap."
   (:require [omnia
              [db :as db]
-             [lucene :as lucene]]
+             [index :as lucene]]
             [clojure.string :refer [blank? lower-case]]
             [clj-http.client :as client]))
 

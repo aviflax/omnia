@@ -1,8 +1,7 @@
-;; TODO: rename this to “index”
-(ns omnia.lucene
+(ns omnia.index
   (:require [clucy.core :as clucy]))
 
-(def index (clucy/disk-index "data/lucene"))
+(def ^:private index (clucy/disk-index "data/lucene"))
 
 (defn ^:private trunc
   [s n]
