@@ -1,28 +1,41 @@
 (ns omnia-poc.core
-  (:require [omnia-poc.lucene :as lucene]
-            [omnia-poc.db :as db]
-            [omnia-poc.dropbox :as dropbox]
+  (:require [omnia-poc
+             [lucene :as lucene]
+             [db :as db]
+             [accounts :as accounts]]
             [clucy.core :as clucy])
   (:import (java.util.concurrent ScheduledThreadPoolExecutor TimeUnit)))
 
-(defn search [q]
-  (clucy/search lucene/index q 10))
+;; TBD:
+;; * should I bother with IDs at this point? (I *think* so…)
 
-(def sync-task)
+(defrecord User [id name])
+
+(defrecord Account-Type [name client-id client-secret])
+
+(defrecord Account [id user-id type-name access-token refresh-token sync-cursor])
+
+(defrecord Document [id name path account-id])
+
+(def executor (ScheduledThreadPoolExecutor. 5))
+(def tasks (atom []))
 
 (defn start-syncing []
-  (def sync-task
-    (.scheduleAtFixedRate
-      (ScheduledThreadPoolExecutor. 1)
-      #(do (dropbox/synchronize! (db/get-source "Dropbox"))
-           (println "synced!"))
-      0
-      5
-      TimeUnit/SECONDS)))
+  (doseq [account (db/get-accounts "avi@aviflax.com")]
+    (let [task (.scheduleAtFixedRate
+                 executor
+                 #(do (println "syncing" (-> account :type :name))
+                      (try
+                        (accounts/synch account)
+                        (catch Exception e
+                          (println "caught exception: " e)))
+                      (println "synced" (-> account :type :name)))
+                 0
+                 5
+                 TimeUnit/SECONDS)]
+      (swap! tasks conj task))))
 
 (defn stop-syncing []
-  (.cancel sync-task false))
-
-(defn -main
-  [& args]
-  (println "Hello, World!"))
+  (doseq [task @tasks]
+    (.cancel task false))
+  (reset! tasks []))

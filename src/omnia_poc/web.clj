@@ -5,7 +5,7 @@
             [ring.middleware.stacktrace :refer [wrap-stacktrace]]
             [hiccup.page :refer [html5]]
             [hiccup.form :as f]
-            [omnia-poc.core :refer [search]]
+            [omnia-poc.lucene :as index]
             [clojure.string :refer [capitalize join split]]))
 
 (defn handle-index []
@@ -18,21 +18,20 @@
                      (f/text-field :q)
                      (f/submit-button "Search"))]))
 
-(defn ^:private trunc
-  [s n]
-  (if (nil? s)
-      ""
-      (subs s 0 (min (count s) n))))
-
 (defn link [file]
   (if (contains? file :alternateLink)
       (:alternateLink file)
-      (let [path-segments (split (:omnia-source-id file) #"/")
+      (let [path-segments (split (:omnia-file-id file) #"/")
             dir-path (join "/" (butlast path-segments))]
         (str "https://www.dropbox.com/home" dir-path "?preview=" (last path-segments)))))
 
+(defn capitalize-each-word [s]
+  (as-> ((fnil split "") s #" ") it                         ;; TEMP TEMP UGLY HACK TEMP TEMP
+        (map capitalize it)
+        (join " " it)))
+
 (defn handle-search [query]
-  (let [results (search query)]
+  (let [results (doall (index/search query))]
     (html5 [:head
             [:title "Omnia"]]
            [:body
@@ -48,11 +47,11 @@
                  [:a {:href (link result)}
                   (:name result)]]
                 [:label.path (:path result)]
-                [:p.snippet (trunc (:text result) 100) "…"]
-                [:label.source "(" (as-> (:omnia-source result) it
-                                         (split it #" ")
-                                         (map capitalize it)
-                                         (join " " it)) ")"]
+                [:p.snippet (:snippet result) "…"]
+                [:label.source
+                 "("
+                 (-> result :omnia-account-type-name capitalize-each-word)
+                 ")"]
                 [:hr]])]])))
 
 (defroutes routes

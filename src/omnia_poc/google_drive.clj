@@ -12,81 +12,83 @@
 
 (defn get-access-token
   ^:private
-  [{:keys [client-id client-secret refresh-token] :as source}]
+  [{:keys [refresh-token], {:keys [client-id client-secret]} :type}]
   (let [url "https://www.googleapis.com/oauth2/v3/token"
-        response (client/post url {:form-params {:client_id client-id
+        response (client/post url {:form-params {:client_id     client-id
                                                  :client_secret client-secret
-                                                 :grant_type "refresh_token"
+                                                 :grant_type    "refresh_token"
                                                  :refresh_token refresh-token}
-                                   :as :json})]
+                                   :as          :json})]
     (get-in response [:body :access_token])))
 
 (defn goget
   ^:private
-  [url {:keys [access-token refresh-token] :as source} & [opts]]
+  [url {:keys [access-token refresh-token] :as account} & [opts]]
   ;; TODO: switch to try/catch and rethrow anything other than 401
-  ;; TODO: figure out a way to update the source that is being used in outer contexts
+  ;; TODO: figure out a way to update the account that is being used in outer contexts
   (let [response (client/get url (assoc opts :throw-exceptions false
                                              :oauth-token access-token))]
     (if (= (:status response) 401)
-        (let [token (get-access-token source)]
-          (println "got new access token" token " so updating source in DB")
-          (db/update-source "Google Drive" :access-token token)
+        (let [token (get-access-token account)]
+          (println "got new access token" token " so updating account in DB")
+          (db/update-account account :access-token token)
           (println "trying again with new access token" token)
-          (goget url (assoc source :access-token token) opts))
+          (goget url (assoc account :access-token token) opts))
         response)))
 
-(defn gdrive-file->omnia-file [source file]
+(defn gdrive-file->omnia-file [account file]
   (assoc file :name (:title file)
-              :path nil ; TODO: add path, if not toooo much of a hassle
+              :path nil                                     ; TODO: add path, if not toooo much of a hassle
               :mime-type (:mimeType file)
-              :omnia-source-id (lower-case (:id file))      ; lower-case to work around a bug in clucy
-              :omnia-source (lower-case (:name source))))   ; lower-case to work around a bug in clucy
+              :omnia-file-id (lower-case (:id file))        ; lower-case to work around a bug in clucy
+              :omnia-account-id (:id account)
+              :omnia-account-type-name (-> account :type :name))) ; TODO: probably doesn’t make sense to store this here; I can get it by reference via the account ID
 
 (defn add-text
   "If the file’s mime type is text/plain, retrieves the text and adds it to the file map in :text.
   Otherwise returns the file map as-is. TODO: move the filtering elsewhere."
-  [source file]
+  [account file]
   (if (not= (:mimeType file) "text/plain")
       file
       (let [response (goget (str "https://www.googleapis.com/drive/v2/files/" (:id file))
-                            source
+                            account
                             {:query-params {"alt" "media"}
-                             :as :stream})
+                             :as           :stream})
             text (slurp (:body response))]
         (assoc file :text text))))
 
-(defn ^:private get-changes [source cursor]
+(defn ^:private get-changes [account cursor]
   (goget "https://www.googleapis.com/drive/v2/changes"
-         source
-         {:as :json
+         account
+         {:as           :json
           :query-params (if (blank? cursor)
                             {}
                             {"pageToken" (-> cursor bigint int inc)})}))
 
-(defn process-change-item! [source item]
+(defn process-change-item! [account item]
   (if (:deleted item)
-      (lucene/delete-file {:omnia-source (lower-case (:name source))
-                           :omnia-source-id (lower-case (:fileId item))})
+      (lucene/delete-file {:name             (:title item)
+                           :omnia-account-id (:id account)
+                           :omnia-file-id    (lower-case (:fileId item))})
       (let [file (:file item)]
         (println (:title file))
-        (->> (gdrive-file->omnia-file source file)
-             (add-text source)
-             lucene/add-or-update-file)
+        (as-> (gdrive-file->omnia-file account file) document
+              (add-text account document)
+              (lucene/add-or-update-file document))
         (Thread/sleep 100))))
 
-(defn synchronize! [source]
-  (loop [cursor (:sync-cursor source)]
-    (let [response (get-changes source cursor)
+(defn synchronize! [account]
+  (loop [cursor (:sync-cursor account)]
+    (let [response (get-changes account cursor)
           changes (:body response)]
       (when (not= (:status response) 200)
         (throw (Exception. "ruh roh")))
 
-      (run! (partial process-change-item! source)
+      (run! (partial process-change-item! account)
             (:items changes))
 
-      ; update source cursor in DB
-      (db/update-source "Google Drive" :sync-cursor (str (:largestChangeId changes)))
+      ; update account cursor in DB
+      (db/update-account account :sync-cursor (str (:largestChangeId changes)))
 
       ; get more
       (when (not (blank? (:nextLink changes)))

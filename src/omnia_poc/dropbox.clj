@@ -28,37 +28,39 @@
     (str stream)))
 
 (defn dropbox-file->omnia-file-with-text
-  [client source file]
+  [client account file]
   (let [f (hash-map :name (.name file)
                     :path (.path file)
-                    ; lower-case to work around a possible bug in clucy
-                    :omnia-source-id (lower-case (.path file))
-                    ; lower-case to work around a possible bug in clucy
-                    :omnia-source (lower-case (:name source)))]
+                    ;; TODO: include account ID in omnia-file-id so as to ensure uniqueness and avoid conflicts
+                    :omnia-file-id (lower-case (.path file)) ; lower-case to work around a possible bug in clucy
+                    :omnia-account-id (:id account)
+                    :omnia-account-type-name (-> account :type :name))]
     (if (or (.endsWith (.path file) ".txt")                 ; TODO: make this much more sophisticated!
             (.endsWith (.path file) ".md"))
         (assoc f :text (get-file-content (.path file) client))
         f)))
 
-(defn process-delta-entry! [client source entry]
+(defn process-delta-entry! [client account entry]
   (if-let [md (.metadata entry)]
-    (when (.isFile md)                                      ; TODO: handle directories?
+    ; TODO: handle directories? I think not — Omnia is about Documents.
+    ; TODO: skip files wherein any path segment stars with . — e.g. .svn, .git.
+    (when (.isFile md)
       (println (.path md))
-      (-> (dropbox-file->omnia-file-with-text client source md)
+      (-> (dropbox-file->omnia-file-with-text client account md)
           lucene/add-or-update-file)
-      (Thread/sleep 10))
-    (lucene/delete-file {:omnia-source (lower-case (:name source))
-                         :omnia-source-id (lower-case (.lcPath entry))})))
+      (Thread/sleep 5))
+    (lucene/delete-file {:omnia-account-id (:id account)
+                         :omnia-file-id (lower-case (.lcPath entry))})))
 
-(defn synchronize! [{:keys [sync-cursor] :as source}]
-  (let [client (get-client source)]
+(defn synchronize! [{:keys [sync-cursor] :as account}]
+  (let [client (get-client account)]
     (loop [cursor sync-cursor]
       (let [delta (.getDelta client cursor)]
-        (run! (partial process-delta-entry! client source)
+        (run! (partial process-delta-entry! client account)
               (.entries delta))
 
-        ; update source cursor in DB
-        (db/update-source "Dropbox" :sync-cursor (.cursor delta))
+        ; update account cursor in DB
+        (db/update-account account :sync-cursor (.cursor delta))
 
         ; get more
         (when (.hasMore delta)
