@@ -3,7 +3,8 @@
              [dropbox :as dropbox]
              [google-drive :as gdrive]
              [index :as index]
-             [db :as db]]))
+             [db :as db]])
+  (:import [java.util.concurrent ScheduledThreadPoolExecutor TimeUnit]))
 
 (defmulti synch (fn [account] (-> account :type :name)))
 
@@ -19,3 +20,26 @@
 (defn reset [account]
   (index/delete-all-docs-for-account account)
   (db/update-account account :sync-cursor nil))
+
+(def executor (ScheduledThreadPoolExecutor. 5))
+(def tasks (atom []))
+
+(defn start-syncing []
+  (doseq [account (db/get-accounts "avi@aviflax.com")]
+    (let [task (.scheduleAtFixedRate
+                 executor
+                 #(do (println "syncing" (-> account :type :name))
+                      (try
+                        (synch account)
+                        (catch Exception e
+                          (println "caught exception: " e)))
+                      (println "synced" (-> account :type :name)))
+                 0
+                 5
+                 TimeUnit/SECONDS)]
+      (swap! tasks conj task))))
+
+(defn stop-syncing []
+  (doseq [task @tasks]
+    (.cancel task false))
+  (reset! tasks []))
