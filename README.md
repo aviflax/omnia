@@ -1,4 +1,4 @@
-# omnia-poc
+# Omnia
 
 FIXME: description
 
