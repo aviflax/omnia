@@ -1,4 +1,4 @@
-(defproject omnia-poc "0.1.0-SNAPSHOT"
+(defproject omnia "0.1.0-SNAPSHOT"
   :description "FIXME: write description"
   :url "http://example.com/FIXME"
   :license {:name "TBD"
@@ -26,4 +26,3 @@
   :target-path "target/%s"
   :profiles {:dev {:dependencies [[cursive/datomic-stubs "0.9.5153" :scope "provided"]]}
              :uberjar {:aot :all}})
-
