@@ -2,6 +2,16 @@
 
 FIXME: description
 
+## TODO
+
+* Domain model: rename “file” to “document”
+* Domain mode: rename “account type” to “service”
+* Try using namespaces in document keys, i.e. `:omnia/id` rather than `:omnia-id`
+* Try having the indexer return Document record instances
+* Upgrade Dropbox SDK to 2.0 when it comes out
+* Modify Dropbox and Google Drive Import/Sync to only import docs that should be shared within the org
+* Ensure that only Business/Domain/Team service accounts can be added
+
 ## Installation
 
 Download from http://example.com/FIXME.
