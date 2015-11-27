@@ -6,8 +6,8 @@
 (defn ^:private trunc
   [s n]
   (if (nil? s)
-    ""
-    (subs s 0 (min (count s) n))))
+      ""
+      (subs s 0 (min (count s) n))))
 
 (defn search [q]
   (map
