@@ -7,7 +7,7 @@
    how to actually *use* all that crap."
   (:require [omnia
              [db :as db]
-             [index :as lucene]]
+             [index :as index]]
             [clojure.string :refer [blank? lower-case]]
             [clj-http.client :as client]))
 
@@ -68,14 +68,14 @@
 
 (defn process-change-item! [account item]
   (if (:deleted item)
-      (lucene/delete-file {:name             (:title item)
+      (index/delete-file {:name             (:title item)
                            :omnia-account-id (:id account)
                            :omnia-file-id    (lower-case (:fileId item))})
       (let [file (:file item)]
         (println (:title file))
         (as-> (gdrive-file->omnia-file account file) document
               (add-text account document)
-              (lucene/add-or-update-file document))
+              (index/add-or-update-file document))
         (Thread/sleep 100))))
 
 (defn synchronize! [account]

@@ -1,6 +1,6 @@
 (ns omnia.dropbox
   (:require [omnia [db :as db]
-             [index :as lucene]]
+             [index :as index]]
             [clojure.string :refer [lower-case split]])
   (:import [com.dropbox.core DbxAppInfo DbxRequestConfig DbxWebAuthNoRedirect DbxClient]
            java.util.Locale
@@ -55,9 +55,9 @@
         (do
           (println "indexing" (.path md))
           (-> (dropbox-file->omnia-file-with-text client account md)
-              lucene/add-or-update-file))
+              index/add-or-update-file))
         (println "skipping" (.path md)))
-    (lucene/delete-file {;;:omnia-account-id (:id account)
+    (index/delete-file {;;:omnia-account-id (:id account)
                          :omnia-file-id (lower-case (.lcPath entry))})))
 
 (defn synchronize! [{:keys [sync-cursor] :as account}]
