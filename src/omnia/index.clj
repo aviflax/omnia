@@ -1,4 +1,7 @@
 (ns omnia.index
+  "TODO: maybe rework the semantics of the add/update API… I’ve had issues wherein a file wasn’t being deleted even
+  though it *was* in the index. To be clear, that was my fault, due to a bug I introduced. Still, it’d be nice if that
+  case would result in throwing an exception rather than adding a duplicate entry to the index."
   (:require [clucy.core :as clucy]))
 
 (def ^:private index (clucy/disk-index "data/lucene"))
@@ -36,7 +39,7 @@
   (clucy/add index (fix-meta file)))
 
 (defn add-or-update-file [file]
-  "If the file is already in the index, it gets deleted then added. Otherwise just added.
+  "First the file is deleted — which is a noop if the file’s not in the index. Then it’s added.
    Yes, this is how you do updates in Lucene."
   (delete-file file)
   (add-file file))
