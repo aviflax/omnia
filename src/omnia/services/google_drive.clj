@@ -66,7 +66,7 @@
          {:as           :json
           :query-params (if (blank? cursor)
                             {}
-                            {"pageToken" (-> cursor bigint int inc)})}))
+                            {"pageToken" (-> cursor bigint int)})}))
 
 (defn process-change-item! [account item]
   (if (:deleted item)
@@ -79,6 +79,14 @@
              (add-text account)
              index/add-or-update))))
 
+(defn ^:private next-cursor-from-changes
+  [changes]
+  ;; TODO: handle exceptions, no matches found, etc.
+  (when (not (blank? (:nextLink changes)))
+    (-> (re-seq #"pageToken=(\d+)" (:nextLink changes))
+        first
+        second)))
+
 (defn synchronize! [account]
   (loop [cursor (:sync-cursor account)]
     (let [response (get-changes account cursor)
@@ -89,11 +97,11 @@
       (run! (partial process-change-item! account)
             (:items changes))
 
-      ; update account cursor in DB
-      (db/update-account account :sync-cursor (str (:largestChangeId changes)))
-
-      (Thread/sleep 10)
-
       ; get more
-      (when (not (blank? (:nextLink changes)))
-        (recur (:largestChangeId changes))))))
+      (if-let [next-cursor (next-cursor-from-changes changes)]
+        (do
+          (db/update-account account :sync-cursor (str next-cursor))
+          (Thread/sleep 10)
+          (recur next-cursor))
+        (db/update-account account :sync-cursor (-> changes :largestChangeId bigint int inc str)))))
+  nil)
