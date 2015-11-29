@@ -1,7 +1,8 @@
-(ns omnia.accounts
-  (:require [omnia
+(ns omnia.services.core
+  (:require [omnia.services
              [dropbox :as dropbox]
-             [google-drive :as gdrive]
+             [google-drive :as gdrive]]
+            [omnia
              [index :as index]
              [db :as db]])
   (:import [java.util.concurrent ScheduledThreadPoolExecutor TimeUnit]))

@@ -1,4 +1,4 @@
-(ns omnia.dropbox
+(ns omnia.services.dropbox
   (:require [omnia
              [db :as db]
              [index :as index]]

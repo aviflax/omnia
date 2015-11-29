@@ -1,4 +1,4 @@
-(ns omnia.google-drive
+(ns omnia.services.google-drive
   "If might seem odd that this ns uses GDrive’s REST API directly via HTTP
    rather than employing GDrive’s Java SDK that should hypothetically provide
    a more convenient way to integrate with GDrive, similar to the Dropbox case.
