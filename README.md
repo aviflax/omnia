@@ -8,7 +8,7 @@ FIXME: description
 * Try having the indexer return Document record instances
 * Upgrade Dropbox SDK to 2.0 when it comes out
 * Modify Dropbox and Google Drive Import/Sync to only import docs that should be shared within the org
-* Ensure that only Business/Domain/Team service accounts can be added
+* Ensure that only Business/Domain/Team service accounts can be added (maybe?)
 
 ## Installation
 
