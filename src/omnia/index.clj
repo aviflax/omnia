@@ -20,26 +20,26 @@
            (dissoc result :text))
     (clucy/search index q 10)))
 
-(defn delete-file [file]
+(defn delete [doc]
   "If the file isn’t found, this is just a no-op"
-  (println "Deleting" (:name file) "from index, if present")
-  (clucy/delete index (select-keys file [:omnia-file-id :omnia-account-id])))
+  (println "Deleting" (:name doc) "from index, if present")
+  (clucy/delete index (select-keys doc [:omnia-file-id :omnia-account-id])))
 
 (defn delete-all-docs-for-account [account]
   (clucy/delete index {:omnia-account-id (:id account)}))
 
-(defn fix-meta [file]
-  (with-meta file {:omnia-file-id           {:analyzed false :norms false} ; it’s important not to analyze this because it sometimes contain chars that Lucene by default will split up, e.g. `/`
+(defn fix-meta [doc]
+  (with-meta doc {:omnia-file-id           {:analyzed false :norms false} ; it’s important not to analyze this because it sometimes contain chars that Lucene by default will split up, e.g. `/`
                    :omnia-account-id        {:analyzed false :norms false} ; not absolutely sure we need this to not be analyzed but probably harmless for now
                    :omnia-account-type-name {:analyzed false :norms false}}))
 
-(defn add-file [file]
+(defn add [doc]
   "Be careful not to accidentally add duplicate entries to the index with this."
-  (println "Indexing" (:name file) "from" (:omnia-account-type-name file))
-  (clucy/add index (fix-meta file)))
+  (println "Indexing" (:name doc) "from" (:omnia-account-type-name doc))
+  (clucy/add index (fix-meta doc)))
 
-(defn add-or-update-file [file]
-  "First the file is deleted — which is a noop if the file’s not in the index. Then it’s added.
+(defn add-or-update [doc]
+  "First the doc is deleted — which is a noop if the doc’s not in the index. Then it’s added.
    Yes, this is how you do updates in Lucene."
-  (delete-file file)
-  (add-file file))
+  (delete doc)
+  (add doc))

@@ -27,10 +27,10 @@
                      (search-field "")
                      (f/submit-button "Search"))]))
 
-(defn link [file]
-  (if (contains? file :alternateLink)
-      (:alternateLink file)
-      (let [path-segments (split (:omnia-file-id file) #"/")
+(defn link [doc]
+  (if (contains? doc :alternateLink)
+      (:alternateLink doc)
+      (let [path-segments (split (:omnia-file-id doc) #"/")
             dir-path (join "/" (butlast path-segments))]
         (str "https://www.dropbox.com/home" dir-path "?preview=" (last path-segments)))))
 

@@ -37,7 +37,9 @@
           (goget url (assoc account :access-token token) opts))
         response)))
 
-(defn gdrive-file->omnia-file [account file]
+(defn file->doc
+  "Convert a Google Drive file to an Omnia document."
+  [account file]
   (assoc file :name (:title file)
               :path nil                                     ; TODO: add path, if not toooo much of a hassle
               :mime-type (:mimeType file)
@@ -68,15 +70,14 @@
 
 (defn process-change-item! [account item]
   (if (:deleted item)
-      (index/delete-file {:name             (:title item)
-                           :omnia-account-id (:id account)
-                           :omnia-file-id    (lower-case (:fileId item))})
+      (index/delete {:name             (:title item)
+                     :omnia-account-id (:id account)
+                     :omnia-file-id    (lower-case (:fileId item))})
       (let [file (:file item)]
         (println (:title file))
-        (as-> (gdrive-file->omnia-file account file) document
-              (add-text account document)
-              (index/add-or-update-file document))
-        (Thread/sleep 100))))
+        (->> (file->doc account file)
+             (add-text account)
+             index/add-or-update))))
 
 (defn synchronize! [account]
   (loop [cursor (:sync-cursor account)]
@@ -90,6 +91,8 @@
 
       ; update account cursor in DB
       (db/update-account account :sync-cursor (str (:largestChangeId changes)))
+
+      (Thread/sleep 10)
 
       ; get more
       (when (not (blank? (:nextLink changes)))

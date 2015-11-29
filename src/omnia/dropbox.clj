@@ -1,5 +1,6 @@
 (ns omnia.dropbox
-  (:require [omnia [db :as db]
+  (:require [omnia
+             [db :as db]
              [index :as index]]
             [clojure.string :refer [lower-case split]])
   (:import [com.dropbox.core DbxAppInfo DbxRequestConfig DbxWebAuthNoRedirect DbxClient]
@@ -28,16 +29,18 @@
     (str stream)))
 
 (defn should-get-full-text? [file]
-  (or (.endsWith (.path file) ".txt")                 ; TODO: make this much more sophisticated!
+  (or (.endsWith (.path file) ".txt")                       ; TODO: make this much more sophisticated!
       (.endsWith (.path file) ".md")))
 
 (defn should-index? [metadata-entry]
   (and (.isFile metadata-entry)
        (not (some #(.startsWith % ".")
                   (split (.path metadata-entry) #"/")))
-       (should-get-full-text? metadata-entry))) ;; TEMP TEMP Just to speed up full-account indexing
+       (should-get-full-text? metadata-entry)))             ;; TEMP TEMP Just to speed up full-account indexing
 
-(defn dropbox-file->omnia-file-with-text
+(defn file->doc-with-text
+  "Convert a Dropbox file to an Omnia document — with full text.
+   TODO: break this into two functions as in Google Drive."
   [client account file]
   (let [f (hash-map :name (.name file)
                     :path (.path file)
@@ -54,11 +57,11 @@
     (if (should-index? md)
         (do
           (println "indexing" (.path md))
-          (-> (dropbox-file->omnia-file-with-text client account md)
-              index/add-or-update-file))
+          (-> (file->doc-with-text client account md)
+              index/add-or-update))
         (println "skipping" (.path md)))
-    (index/delete-file {;;:omnia-account-id (:id account)
-                         :omnia-file-id (lower-case (.lcPath entry))})))
+    (index/delete {;;:omnia-account-id (:id account)
+                   :omnia-file-id (lower-case (.lcPath entry))})))
 
 (defn synchronize! [{:keys [sync-cursor] :as account}]
   (let [client (get-client account)]
