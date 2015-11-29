@@ -6,7 +6,7 @@
              [db :as db]])
   (:import [java.util.concurrent ScheduledThreadPoolExecutor TimeUnit]))
 
-(defmulti synch (fn [account] (-> account :type :name)))
+(defmulti synch (fn [account] (-> account :service :name)))
 
 (defmethod synch "Dropbox" [account]
   (dropbox/synchronize! account))
@@ -15,7 +15,16 @@
   (gdrive/synchronize! account))
 
 (defmethod synch :default [account]
-  (throw (IllegalArgumentException. (str "Unsupported account type " (-> account :type :name)))))
+  (throw (IllegalArgumentException. (str "Unsupported account service " (-> account :service :name)))))
+
+(defn sync-all [user-email]
+  (doseq [account (db/get-accounts user-email)]
+    (print "syncing" (-> account :service :name) "...")
+    (try
+      (synch account)
+      (println "done.")
+      (catch Exception e
+        (println "caught exception: " e)))))
 
 (defn reset [account]
   (index/delete-all-docs-for-account account)
@@ -33,13 +42,7 @@
   ;; is inefficient and unclear so needs to be refactored. So, you know, TODO.
   (let [task (.scheduleAtFixedRate
                executor
-               #(doseq [account (db/get-accounts "avi@aviflax.com")]
-                 (println "syncing" (-> account :type :name))
-                 (try
-                   (synch account)
-                   (catch Exception e
-                     (println "caught exception: " e)))
-                 (println "synced" (-> account :type :name)))
+               #(sync-all "avi@aviflax.com")
                0
                interval-secs
                TimeUnit/SECONDS)]

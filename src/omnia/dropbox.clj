@@ -47,7 +47,7 @@
                     ;; TODO: include account ID in omnia-file-id so as to ensure uniqueness and avoid conflicts
                     :omnia-file-id (lower-case (.path file)) ; lower-case to work around a possible bug in clucy
                     :omnia-account-id (:id account)
-                    :omnia-account-type-name (-> account :type :name))]
+                    :omnia-service-name (-> account :service :name))]
     (if (should-get-full-text? file)
         (assoc f :text (get-file-content (.path file) client))
         f)))

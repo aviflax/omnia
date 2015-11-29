@@ -22,22 +22,22 @@
     :db.install/_attribute :db.part/db}
    ])
 
-(def account-type-schema
+(def service-schema
   [{:db/id                 (d/tempid :db.part/db)
-    :db/ident              :account-type/name
+    :db/ident              :service/name
     :db/valueType          :db.type/string
     :db/cardinality        :db.cardinality/one
     :db/unique             :db.unique/identity
     :db/doc                "Name of the Account Type, e.g. Dropbox"
     :db.install/_attribute :db.part/db}
    {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :account-type/client-id
+    :db/ident              :service/client-id
     :db/valueType          :db.type/string
     :db/cardinality        :db.cardinality/one
     :db/doc                "OAuth 2.0 Client ID for this Account Type for this installation of Omnia"
     :db.install/_attribute :db.part/db}
    {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :account-type/client-secret
+    :db/ident              :service/client-secret
     :db/valueType          :db.type/string
     :db/cardinality        :db.cardinality/one
     :db/doc                "OAuth 2.0 Client Secret for this Account Type for this installation of Omnia"
@@ -62,10 +62,10 @@
     :db.install/_attribute :db.part/db}
 
    {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :account/type
+    :db/ident              :account/service
     :db/valueType          :db.type/ref
     :db/cardinality        :db.cardinality/one
-    :db/doc                "The type of Account, e.g. Dropbox"
+    :db/doc                "The service this is an account to/for/of e.g. Dropbox"
     :db.install/_attribute :db.part/db}
 
    {:db/id                 (d/tempid :db.part/db)
@@ -94,7 +94,7 @@
 ;(defn create-db []
 ;  (d/create-database uri)
 ;  (d/transact (connect)
-;              (concat user-schema account-type-schema account-schema)))
+;              (concat user-schema service-schema account-schema)))
 
 ; TBD:
 ; Does it make sense to isolate Datomic from the rest of the system?
@@ -109,13 +109,13 @@
                                                  d/touch
                                                  remove-namespace-from-map-keys))
 
-(defn create-account [{:keys [user-email type-name access-token refresh-token]}]
+(defn create-account [{:keys [user-email service-name access-token refresh-token]}]
   (as-> {} entity
         (assoc entity
           :db/id (d/tempid :db.part/user)
           :account/id (d/squuid)
           :account/user [:user/email user-email]
-          :account/type [:account-type/name type-name]
+          :account/service [:service/name service-name]
           :account/access-token access-token)
         (if refresh-token
             (assoc entity :account/refresh-token refresh-token)
@@ -124,16 +124,16 @@
 
 (defn get-accounts [user-email]
   (let [db (d/db (connect))
-        results (d/q '[:find ?account ?type
+        results (d/q '[:find ?account ?service
                        :in $ ?user-email
                        :where [?user :user/email ?user-email]
                        [?account :account/user ?user]
-                       [?type :account-type/name]
-                       [?account :account/type ?type]]
+                       [?service :service/name]
+                       [?account :account/service ?service]]
                      db user-email)]
     (map (fn [result]
            (-> (entity-ref->map db (first result))
-               (assoc :type (entity-ref->map db (second result)))
+               (assoc :service (entity-ref->map db (second result)))
                (dissoc :user)))
          results)))
 

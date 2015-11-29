@@ -13,7 +13,7 @@
 
 (defn get-access-token
   ^:private
-  [{:keys [refresh-token], {:keys [client-id client-secret]} :type}]
+  [{:keys [refresh-token], {:keys [client-id client-secret]} :service}]
   (let [url "https://www.googleapis.com/oauth2/v3/token"
         response (client/post url {:form-params {:client_id     client-id
                                                  :client_secret client-secret
@@ -24,7 +24,7 @@
 
 (defn goget
   ^:private
-  [url {:keys [access-token refresh-token] :as account} & [opts]]
+  [url {:keys [access-token] :as account} & [opts]]
   ;; TODO: switch to try/catch and rethrow anything other than 401
   ;; TODO: figure out a way to update the account that is being used in outer contexts
   (let [response (client/get url (assoc opts :throw-exceptions false
@@ -45,7 +45,7 @@
               :mime-type (:mimeType file)
               :omnia-file-id (lower-case (:id file))        ; lower-case to work around a bug in clucy
               :omnia-account-id (:id account)
-              :omnia-account-type-name (-> account :type :name))) ; TODO: probably doesn’t make sense to store this here; I can get it by reference via the account ID
+              :omnia-service-name (-> account :service :name))) ; TODO: probably doesn’t make sense to store this here; I can get it by reference via the account ID
 
 (defn add-text
   "If the file’s mime type is text/plain, retrieves the text and adds it to the file map in :text.

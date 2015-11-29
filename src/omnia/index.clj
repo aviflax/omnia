@@ -29,13 +29,13 @@
   (clucy/delete index {:omnia-account-id (:id account)}))
 
 (defn fix-meta [doc]
-  (with-meta doc {:omnia-file-id           {:analyzed false :norms false} ; it’s important not to analyze this because it sometimes contain chars that Lucene by default will split up, e.g. `/`
-                   :omnia-account-id        {:analyzed false :norms false} ; not absolutely sure we need this to not be analyzed but probably harmless for now
-                   :omnia-account-type-name {:analyzed false :norms false}}))
+  (with-meta doc {:omnia-file-id      {:analyzed false :norms false} ; it’s important not to analyze this because it sometimes contain chars that Lucene by default will split up, e.g. `/`
+                  :omnia-account-id   {:analyzed false :norms false} ; not absolutely sure we need this to not be analyzed but probably harmless for now
+                  :omnia-service-name {:analyzed false :norms false}}))
 
 (defn add [doc]
   "Be careful not to accidentally add duplicate entries to the index with this."
-  (println "Indexing" (:name doc) "from" (:omnia-account-type-name doc))
+  (println "Indexing" (:name doc) "from" (:omnia-service-name doc))
   (clucy/add index (fix-meta doc)))
 
 (defn add-or-update [doc]

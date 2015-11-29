@@ -61,7 +61,7 @@
                     [:p.snippet (:snippet result) "…"]
                     [:label.source
                      "("
-                     (-> result :omnia-account-type-name capitalize-each-word)
+                     (-> result :omnia-service-name capitalize-each-word)
                      ")"]
                     [:hr]])]]))))
 
