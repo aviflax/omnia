@@ -14,7 +14,7 @@
            :name      "q"
            :id        "q"
            :value     query
-           :required  "" ; save a few bytes!
+           :required  ""                                    ; save a few bytes!
            :autofocus ""}])
 
 (defn handle-index []
@@ -30,7 +30,7 @@
 (defn link [doc]
   (if (contains? doc :alternateLink)
       (:alternateLink doc)
-      (let [path-segments (split (:omnia-file-id doc) #"/")
+      (let [path-segments (split (:omnia-id doc) #"/")
             dir-path (join "/" (butlast path-segments))]
         (str "https://www.dropbox.com/home" dir-path "?preview=" (last path-segments)))))
 

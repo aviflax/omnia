@@ -44,8 +44,8 @@
   [client account file]
   (let [f (hash-map :name (.name file)
                     :path (.path file)
-                    ;; TODO: include account ID in omnia-file-id so as to ensure uniqueness and avoid conflicts
-                    :omnia-file-id (lower-case (.path file)) ; lower-case to work around a possible bug in clucy
+                    ;; TODO: include account ID in omnia-id so as to ensure uniqueness and avoid conflicts
+                    :omnia-id (lower-case (.path file))     ; lower-case to work around a possible bug in clucy
                     :omnia-account-id (:id account)
                     :omnia-service-name (-> account :service :name))]
     (if (should-get-full-text? file)
@@ -60,8 +60,8 @@
           (-> (file->doc-with-text client account md)
               index/add-or-update))
         (println "skipping" (.path md)))
-    (index/delete {;;:omnia-account-id (:id account)
-                   :omnia-file-id (lower-case (.lcPath entry))})))
+    (index/delete {:omnia-account-id (:id account)
+                   :omnia-id (lower-case (.lcPath entry))})))
 
 (defn synchronize! [{:keys [sync-cursor] :as account}]
   (let [client (get-client account)]

@@ -1,5 +1,5 @@
 (ns omnia.index
-  "TODO: maybe rework the semantics of the add/update API… I’ve had issues wherein a file wasn’t being deleted even
+  "TODO: maybe rework the semantics of the add/update API… I’ve had issues wherein a doc wasn’t being deleted even
   though it *was* in the index. To be clear, that was my fault, due to a bug I introduced. Still, it’d be nice if that
   case would result in throwing an exception rather than adding a duplicate entry to the index."
   (:require [clucy.core :as clucy]))
@@ -21,15 +21,15 @@
     (clucy/search index q 10)))
 
 (defn delete [doc]
-  "If the file isn’t found, this is just a no-op"
+  "If the doc isn’t found, this is just a no-op"
   (println "Deleting" (:name doc) "from index, if present")
-  (clucy/delete index (select-keys doc [:omnia-file-id :omnia-account-id])))
+  (clucy/delete index (select-keys doc [:omnia-id :omnia-account-id])))
 
 (defn delete-all-docs-for-account [account]
   (clucy/delete index {:omnia-account-id (:id account)}))
 
 (defn fix-meta [doc]
-  (with-meta doc {:omnia-file-id      {:analyzed false :norms false} ; it’s important not to analyze this because it sometimes contain chars that Lucene by default will split up, e.g. `/`
+  (with-meta doc {:omnia-id           {:analyzed false :norms false} ; it’s important not to analyze this because it sometimes contain chars that Lucene by default will split up, e.g. `/`
                   :omnia-account-id   {:analyzed false :norms false} ; not absolutely sure we need this to not be analyzed but probably harmless for now
                   :omnia-service-name {:analyzed false :norms false}}))
 

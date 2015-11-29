@@ -43,7 +43,7 @@
   (assoc file :name (:title file)
               :path nil                                     ; TODO: add path, if not toooo much of a hassle
               :mime-type (:mimeType file)
-              :omnia-file-id (lower-case (:id file))        ; lower-case to work around a bug in clucy
+              :omnia-id (lower-case (:id file))             ; lower-case to work around a bug in clucy
               :omnia-account-id (:id account)
               :omnia-service-name (-> account :service :name))) ; TODO: probably doesn’t make sense to store this here; I can get it by reference via the account ID
 
@@ -70,9 +70,8 @@
 
 (defn process-change-item! [account item]
   (if (:deleted item)
-      (index/delete {:name             (:title item)
-                     :omnia-account-id (:id account)
-                     :omnia-file-id    (lower-case (:fileId item))})
+      (index/delete {:omnia-account-id (:id account)
+                     :omnia-id         (lower-case (:fileId item))})
       (let [file (:file item)]
         (println (:title file))
         (->> (file->doc account file)
