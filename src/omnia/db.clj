@@ -34,18 +34,18 @@
     :db/ident              :service/client-id
     :db/valueType          :db.type/string
     :db/cardinality        :db.cardinality/one
-    :db/doc                "OAuth 2.0 Client ID for this Account Type for this installation of Omnia"
+    :db/doc                "OAuth 2.0 Client ID for this Service for this installation of Omnia"
     :db.install/_attribute :db.part/db}
    {:db/id                 (d/tempid :db.part/db)
     :db/ident              :service/client-secret
     :db/valueType          :db.type/string
     :db/cardinality        :db.cardinality/one
-    :db/doc                "OAuth 2.0 Client Secret for this Account Type for this installation of Omnia"
+    :db/doc                "OAuth 2.0 Client Secret for this Service for this installation of Omnia"
     :db.install/_attribute :db.part/db}
    ])
 
 (def account-schema
-  "An Account is a linked Account for a specific User for a given Account Type e.g. Dropbox."
+  "An Account is a linked Account for a specific User for a given Service."
   [{:db/id                 (d/tempid :db.part/db)
     :db/ident              :account/id
     :db/valueType          :db.type/uuid
