@@ -7,6 +7,11 @@
            java.util.Locale
            java.io.ByteArrayOutputStream))
 
+(def auth "TODO: maybe this should just be in the database"
+  {:type   :oauth2
+   :oauth2 {:start-uri "https://www.dropbox.com/1/oauth2/authorize"
+            :token-uri "https://api.dropboxapi.com/1/oauth2/token"}})
+
 (defn get-req-config []
   (DbxRequestConfig. "Omnia" (str (Locale/getDefault))))
 
@@ -61,7 +66,7 @@
               index/add-or-update))
         (println "skipping" (.path md)))
     (index/delete {:omnia-account-id (:id account)
-                   :omnia-id (lower-case (.lcPath entry))})))
+                   :omnia-id         (lower-case (.lcPath entry))})))
 
 (defn synchronize! [{:keys [sync-cursor] :as account}]
   (let [client (get-client account)]

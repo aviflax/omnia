@@ -7,20 +7,20 @@
              [db :as db]])
   (:import [java.util.concurrent ScheduledThreadPoolExecutor TimeUnit]))
 
-(defmulti synch (fn [account] (-> account :service :name)))
+(defmulti synch (fn [account] (-> account :service :slug)))
 
-(defmethod synch "Dropbox" [account]
+(defmethod synch "dropbox" [account]
   (dropbox/synchronize! account))
 
-(defmethod synch "Google Drive" [account]
+(defmethod synch "google-drive" [account]
   (gdrive/synchronize! account))
 
 (defmethod synch :default [account]
-  (throw (IllegalArgumentException. (str "Unsupported account service " (-> account :service :name)))))
+  (throw (IllegalArgumentException. (str "Unsupported account service " (-> account :service :display-name)))))
 
 (defn sync-all [user-email]
   (doseq [account (db/get-accounts user-email)]
-    (print "syncing" (-> account :service :name) "...")
+    (print "syncing" (-> account :service :display-name) "...")
     (try
       (synch account)
       (println "done.")

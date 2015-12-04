@@ -24,18 +24,28 @@
 
 (def service-schema
   [{:db/id                 (d/tempid :db.part/db)
-    :db/ident              :service/name
+    :db/ident              :service/slug
     :db/valueType          :db.type/string
     :db/cardinality        :db.cardinality/one
     :db/unique             :db.unique/identity
-    :db/doc                "Name of the Account Type, e.g. Dropbox"
+    :db/doc                "Slug for a Service, e.g. dropbox or google-drive"
     :db.install/_attribute :db.part/db}
+
+   {:db/id                 (d/tempid :db.part/db)
+    :db/ident              :service/display-name
+    :db/valueType          :db.type/string
+    :db/cardinality        :db.cardinality/one
+    :db/unique             :db.unique/identity
+    :db/doc                "Display name of the Service, e.g. "
+    :db.install/_attribute :db.part/db}
+
    {:db/id                 (d/tempid :db.part/db)
     :db/ident              :service/client-id
     :db/valueType          :db.type/string
     :db/cardinality        :db.cardinality/one
     :db/doc                "OAuth 2.0 Client ID for this Service for this installation of Omnia"
     :db.install/_attribute :db.part/db}
+
    {:db/id                 (d/tempid :db.part/db)
     :db/ident              :service/client-secret
     :db/valueType          :db.type/string
@@ -122,6 +132,8 @@
             entity)
         (d/transact (connect) [entity])))
 
+(defn insert-account [account] nil) ;; TODO!!
+
 (defn get-accounts [user-email]
   (let [db (d/db (connect))
         results (d/q '[:find ?account ?service
@@ -144,3 +156,7 @@
                     [[:db/retract [:account/id (:id account)] attr (key account)]]
                     [{:db/id [:account/id (:id account)]
                       attr   value}]))))
+
+(defn get-service [slug]
+  (-> (d/pull (d/db (connect)) '[*] [:service/slug slug])
+      remove-namespace-from-map-keys))
