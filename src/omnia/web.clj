@@ -12,7 +12,7 @@
             [omnia.db :as db]
             [omnia.services.core :refer [synch]]
             [clojure.string :refer [blank? capitalize join split trim]]
-            [omnia.db :as db]))
+            [clj-http.client :as client]))
 
 (defn ^:private search-field [query]
   [:input {:type      "search"
@@ -86,14 +86,14 @@
           (header "Accounts")
           [:ul
            (for [account (db/get-accounts "avi@aviflax.com")]
-             [:li (-> account :service :name)])]
+             [:li (-> account :service :display-name) " (avi@aviflax.com)"])]
           [:a {:href "/accounts/connect"} "Connect a New Account"]]))
 
 (defn ^:private accounts-connect-get []
   (html5 [:head
           [:title "Connect a New Account « Omnia"]]
          [:body
-          (header "Connect a New Account")
+          (header "<a href=\"/accounts\">Accounts</a> » Connect a New Account")
           [:section
            [:h1 "Which type of Account would you like to connect?"]
            [:p [:a {:href "/accounts/connect/dropbox/start"} "Dropbox"]]
@@ -118,11 +118,21 @@
                             :headers {"Content-Type" "text/plain"}
                             :body    "Bad request"})
 
-(defn ^:private get-access-token [service-slug auth-code] nil) ;; TODO
+(defn ^:private get-access-token [service-slug auth-code]
+  ;; TODO: generalize this
+  (let [service (db/get-service service-slug)
+        url "https://api.dropboxapi.com/1/oauth2/token"]
+    (client/post url {:form-params {:client_id     (:client-id service)
+                                    :client_secret (:client-secret service)
+                                    :code          auth-code
+                                    :grant_type    "authorization_code"
+                                    :redirect_uri "http://localhost:3000/accounts/connect/dropbox/finish"}
+                      :as          :json
+                      :throw-entire-message? true})))
 
 (defn ^:private accounts-connect-service-finish-get [service-slug auth-code state]
   (cond
-    (not= "state" "TODO")
+    (not= state "TODO")
     {:status  500                                           ; not actually an internal server error but I don’t want to reveal to an attacker what the problem is
      :headers {"Content-Type" "text/plain"}
      :body    "Internal Server Error"}
@@ -132,11 +142,18 @@
 
     :default
     (let [access-token-response (get-access-token service-slug auth-code)
-          access-token (:access-token access-token-response)]
+          access-token (-> access-token-response :body :access_token)]
       (if (blank? access-token)
           bad-request
-          (let [account (map->Account {:todo "TODO!!!!"})]
-            (db/insert-account account)
+          (let [service (db/get-service service-slug)
+                ;; TODO: check the account userid and don’t create a duplicate new account if it’s already connected
+                ;; TODO: should probably include the account userid (e.g. the Dropbox userid) in the account
+                ;; TODO: stop using email to associate accounts with users
+                account (map->Account {:user-email   "avi@aviflax.com"
+                                       :service-id   (:id service)
+                                       :access-token access-token})]
+            ;; TODO: get user account email address
+            (db/create-account account)
             (future (synch account))
             (redirect (str "/accounts/connect/" service-slug "/done") 307))))))
 
@@ -144,9 +161,10 @@
   (html5 [:head
           [:title "New Account Connected « Omnia"]]
          [:body
-          (header "New Account Connected")
+          (header "Accounts » New Account Connected")
           [:section
-           [:h1 "Your new account has been connected!"]
+           ;; TODO: Generalize
+           [:h1 "Your new Dropbox account has been connected!"]
            [:p "We’ve started indexing your new account in the background. We’ll send you an email when we’re done!"]
 
            [:p [:a {:href "/accounts"} "Back to Accounts"]]]]))

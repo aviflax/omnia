@@ -10,7 +10,8 @@
 (def auth "TODO: maybe this should just be in the database"
   {:type   :oauth2
    :oauth2 {:start-uri "https://www.dropbox.com/1/oauth2/authorize"
-            :token-uri "https://api.dropboxapi.com/1/oauth2/token"}})
+            :token-uri "https://api.dropboxapi.com/1/oauth2/token"
+            :grant_type "authorization_code"}})
 
 (defn get-req-config []
   (DbxRequestConfig. "Omnia" (str (Locale/getDefault))))

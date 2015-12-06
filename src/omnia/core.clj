@@ -2,8 +2,8 @@
 
 (defrecord User [id name])
 
-(defrecord Service [name client-id client-secret])
+(defrecord Service [id slug display-name client-id client-secret])
 
-(defrecord Account [id user-id service-name access-token refresh-token sync-cursor])
+(defrecord Account [id user-id service-id access-token refresh-token sync-cursor])
 
 (defrecord Document [id name path account-id])

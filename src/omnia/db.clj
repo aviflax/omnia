@@ -119,20 +119,18 @@
                                                  d/touch
                                                  remove-namespace-from-map-keys))
 
-(defn create-account [{:keys [user-email service-name access-token refresh-token]}]
+(defn create-account [{:keys [user-email service-id access-token refresh-token]}]
   (as-> {} entity
         (assoc entity
           :db/id (d/tempid :db.part/user)
           :account/id (d/squuid)
           :account/user [:user/email user-email]
-          :account/service [:service/name service-name]
+          :account/service service-id
           :account/access-token access-token)
         (if refresh-token
             (assoc entity :account/refresh-token refresh-token)
             entity)
         (d/transact (connect) [entity])))
-
-(defn insert-account [account] nil) ;; TODO!!
 
 (defn get-accounts [user-email]
   (let [db (d/db (connect))
