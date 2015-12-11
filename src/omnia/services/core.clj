@@ -27,10 +27,6 @@
       (catch Exception e
         (println "caught exception: " e)))))
 
-(defn reset [account]
-  (index/delete-all-docs-for-account account)
-  (db/update-account account :sync-cursor nil))
-
 (def executor (ScheduledThreadPoolExecutor. 5))
 (def tasks (atom []))
 

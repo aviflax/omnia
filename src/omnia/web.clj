@@ -1,18 +1,21 @@
 (ns omnia.web
   (:require [ring.adapter.jetty :refer [run-jetty]]
-            [compojure.core :refer [defroutes GET]]
+            [compojure.core :refer [defroutes GET DELETE]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.stacktrace :refer [wrap-stacktrace]]
             [ring.util.response :refer [redirect]]
             [ring.util.codec :refer [url-encode]]
             [hiccup.page :refer [html5]]
             [hiccup.form :as f]
-            [omnia.core :refer [map->Account]]
-            [omnia.index :as index]
-            [omnia.db :as db]
+            [omnia
+             [accounts :as accounts]
+             [core :refer [map->Account]]
+             [index :as index]
+             [db :as db]]
             [omnia.services.core :refer [synch]]
             [clojure.string :refer [blank? capitalize join split trim]]
-            [clj-http.client :as client]))
+            [clj-http.client :as client])
+  (:import [java.util UUID]))
 
 (defn ^:private search-field [query]
   [:input {:type      "search"
@@ -81,12 +84,16 @@
 
 (defn ^:private accounts-get []
   (html5 [:head
-          [:title "Accounts « Omnia"]]
+          [:title "Accounts « Omnia"]
+          [:style "form { display: inline; margin-left: 1em;}"]]
          [:body
           (header "Accounts")
           [:ul
-           (for [account (db/get-accounts "avi@aviflax.com")]
-             [:li (-> account :service :display-name) " (avi@aviflax.com)"])]
+           (for [account (db/get-accounts "avi@aviflax.com")
+                 :let [service (:service account)]]
+             [:li (:display-name service)
+              (f/form-to [:delete (str "/accounts/" (:id account))]
+                         (f/submit-button "Disconnect"))])]
           [:a {:href "/accounts/connect"} "Connect a New Account"]]))
 
 (defn ^:private accounts-connect-get []
@@ -122,12 +129,12 @@
   ;; TODO: generalize this
   (let [service (db/get-service service-slug)
         url "https://api.dropboxapi.com/1/oauth2/token"]
-    (client/post url {:form-params {:client_id     (:client-id service)
-                                    :client_secret (:client-secret service)
-                                    :code          auth-code
-                                    :grant_type    "authorization_code"
-                                    :redirect_uri "http://localhost:3000/accounts/connect/dropbox/finish"}
-                      :as          :json
+    (client/post url {:form-params           {:client_id     (:client-id service)
+                                              :client_secret (:client-secret service)
+                                              :code          auth-code
+                                              :grant_type    "authorization_code"
+                                              :redirect_uri  "http://localhost:3000/accounts/connect/dropbox/finish"}
+                      :as                    :json
                       :throw-entire-message? true})))
 
 (defn ^:private accounts-connect-service-finish-get [service-slug auth-code state]
@@ -169,6 +176,15 @@
 
            [:p [:a {:href "/accounts"} "Back to Accounts"]]]]))
 
+(defn ^:private account-delete [id]
+  ;; TODO: make this async. Sure, I could just wrap it with `future`, but then the user
+  ;; would navigate back to /accounts and would still see the account they asked to disconnect.
+  ;; I’ll need some way to mark an account as “disconnect in progress”
+  (-> (UUID/fromString id)
+      db/get-account
+      accounts/disconnect)
+  (redirect "/accounts" 303))
+
 (defroutes routes
            (GET "/" [] (handle-index))
            (GET "/search" [q] (handle-search q))
@@ -176,7 +192,8 @@
            (GET "/accounts/connect" [] (accounts-connect-get))
            (GET "/accounts/connect/:service-slug/start" [service-slug] (accounts-connect-service-start-get service-slug))
            (GET "/accounts/connect/:service-slug/finish" [service-slug code state] (accounts-connect-service-finish-get service-slug code state))
-           (GET "/accounts/connect/:service-slug/done" [service-slug] (accounts-connect-service-done-get service-slug)))
+           (GET "/accounts/connect/:service-slug/done" [service-slug] (accounts-connect-service-done-get service-slug))
+           (DELETE "/accounts/:id" [id] (account-delete id)))
 
 (def app
   (-> routes

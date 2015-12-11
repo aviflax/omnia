@@ -1,5 +1,6 @@
 (ns omnia.db
-  (require [datomic.api :as d]))
+  (require [datomic.api :as d]
+           [omnia.core :refer [map->Account map->Service]]))
 
 (def ^:private uri "datomic:free://localhost:4334/omnia")   ;; TODO: move to config
 
@@ -132,6 +133,16 @@
             entity)
         (d/transact (connect) [entity])))
 
+(defn ^:private get-entity [k v f]
+  (let [e (d/pull (d/db (connect)) '[*] [k v])]
+    (when-not (nil? (:db/id e))
+      (-> e
+          remove-namespace-from-map-keys
+          f))))
+
+(defn get-account [id]
+  (get-entity :account/id id map->Account))
+
 (defn get-accounts [user-email]
   (let [db (d/db (connect))
         results (d/q '[:find ?account ?service
@@ -149,12 +160,14 @@
 
 (defn update-account [account key value]
   (let [attr (keyword "account" (name key))]
-    (d/transact (connect)
-                (if (nil? value)
-                    [[:db/retract [:account/id (:id account)] attr (key account)]]
-                    [{:db/id [:account/id (:id account)]
-                      attr   value}]))))
+    @(d/transact (connect)
+                 (if (nil? value)
+                     [[:db/retract [:account/id (:id account)] attr (key account)]]
+                     [{:db/id [:account/id (:id account)]
+                       attr   value}]))))
 
-(defn get-service [slug]
-  (-> (d/pull (d/db (connect)) '[*] [:service/slug slug])
-      remove-namespace-from-map-keys))
+(defn delete-account [account]
+  @(d/transact (connect)
+               [[:db.fn/retractEntity [:account/id (:id account)]]]))
+
+(defn get-service [slug] (get-entity :service/slug slug map->Service))
