@@ -11,8 +11,7 @@
             [clojure.string :refer [blank? lower-case]]
             [clj-http.client :as client]))
 
-(defn get-access-token
-  ^:private
+(defn ^:private get-access-token
   [{:keys [refresh-token], {:keys [client-id client-secret]} :service}]
   (let [url "https://www.googleapis.com/oauth2/v3/token"
         response (client/post url {:form-params {:client_id     client-id
@@ -22,8 +21,7 @@
                                    :as          :json})]
     (get-in response [:body :access_token])))
 
-(defn goget
-  ^:private
+(defn ^:private goget
   [url {:keys [access-token] :as account} & [opts]]
   ;; TODO: switch to try/catch and rethrow anything other than 401
   ;; TODO: figure out a way to update the account that is being used in outer contexts
@@ -47,7 +45,7 @@
               :omnia-account-id (:id account)
               :omnia-service-name (-> account :service :name))) ; TODO: probably doesn’t make sense to store this here; I can get it by reference via the account ID
 
-(defn add-text
+(defn ^:private add-text
   "If the file’s mime type is text/plain, retrieves the text and adds it to the file map in :text.
   Otherwise returns the file map as-is. TODO: move the filtering elsewhere."
   [account file]
@@ -68,7 +66,7 @@
                             {}
                             {"pageToken" (-> cursor bigint int)})}))
 
-(defn process-change-item! [account item]
+(defn ^:private process-change-item! [account item]
   (if (:deleted item)
       (index/delete {:omnia-account-id (:id account)
                      :omnia-id         (lower-case (:fileId item))})
