@@ -156,12 +156,13 @@
                 ;; TODO: check the account userid and don’t create a duplicate new account if it’s already connected
                 ;; TODO: should probably include the account userid (e.g. the Dropbox userid) in the account
                 ;; TODO: stop using email to associate accounts with users
-                account (map->Account {:user-email   "avi@aviflax.com"
-                                       :service-id   (:id service)
-                                       :access-token access-token})]
-            ;; TODO: get user account email address
-            (db/create-account account)
-            (future (synch account))
+                proto-account (map->Account {:user-email   "avi@aviflax.com"
+                                             :service-slug service-slug
+                                             :access-token access-token})
+                account (db/create-account proto-account)]
+            (future
+              (try (synch account)
+                   (catch Exception e (println e))))
             (redirect (str "/accounts/connect/" service-slug "/done") 307))))))
 
 (defn ^:private accounts-connect-service-done-get [_]

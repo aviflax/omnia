@@ -1,6 +1,6 @@
 (ns omnia.db
   (require [datomic.api :as d]
-           [omnia.core :refer [map->Account map->Service]]))
+           [omnia.core :refer [map->Account map->Service map->User]]))
 
 (def ^:private uri "datomic:free://localhost:4334/omnia")   ;; TODO: move to config
 
@@ -116,29 +116,38 @@
                                    (keys m))
                               (vals m))))
 
-(defn ^:private entity-ref->map [db entity] (->> (d/entity db entity)
-                                                 d/touch
-                                                 remove-namespace-from-map-keys))
+(defn ^:private entity->map [entity] (-> (d/touch entity)
+                                         remove-namespace-from-map-keys))
 
-(defn create-account [{:keys [user-email service-id access-token refresh-token]}]
-  (as-> {} entity
-        (assoc entity
-          :db/id (d/tempid :db.part/user)
-          :account/id (d/squuid)
-          :account/user [:user/email user-email]
-          :account/service service-id
-          :account/access-token access-token)
-        (if refresh-token
-            (assoc entity :account/refresh-token refresh-token)
-            entity)
-        (d/transact (connect) [entity])))
+(defn ^:private entity-id->map [db entity-id] (->> (d/entity db entity-id)
+                                                   d/touch
+                                                   remove-namespace-from-map-keys))
 
 (defn ^:private get-entity [k v f]
   (let [e (d/pull (d/db (connect)) '[*] [k v])]
     (when-not (nil? (:db/id e))
-      (-> e
-          remove-namespace-from-map-keys
-          f))))
+      (-> e remove-namespace-from-map-keys f))))
+
+(defn create-account [{:keys [user-email service-slug access-token refresh-token]}]
+  (let [tempid (d/tempid :db.part/user)
+        proto-account (as-> {} it
+                            (assoc it
+                              :db/id tempid
+                              :account/id (d/squuid)
+                              :account/user [:user/email user-email]
+                              :account/service [:service/slug service-slug]
+                              :account/access-token access-token)
+                            (if refresh-token
+                                (assoc it :account/refresh-token refresh-token)
+                                it))
+        tx-result @(d/transact (connect) [proto-account])
+        db-after (:db-after tx-result)
+        entity-id (d/resolve-tempid db-after (:tempids tx-result) tempid)
+        entity (d/entity db-after entity-id)]
+    (as-> (entity->map entity) it
+          (assoc it :user (-> it :user entity->map map->User)
+                    :service (-> it :service entity->map map->Service))
+          (map->Account it))))
 
 (defn get-account [id]
   (get-entity :account/id id map->Account))
@@ -153,8 +162,8 @@
                        [?account :account/service ?service]]
                      db user-email)]
     (map (fn [result]
-           (-> (entity-ref->map db (first result))
-               (assoc :service (entity-ref->map db (second result)))
+           (-> (entity-id->map db (first result))
+               (assoc :service (entity-id->map db (second result)))
                (dissoc :user)))
          results)))
 

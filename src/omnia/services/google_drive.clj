@@ -43,7 +43,7 @@
               :mime-type (:mimeType file)
               :omnia-id (lower-case (:id file))             ; lower-case to work around a bug in clucy
               :omnia-account-id (:id account)
-              :omnia-service-name (-> account :service :name))) ; TODO: probably doesn’t make sense to store this here; I can get it by reference via the account ID
+              :omnia-service-name (-> account :service :display-name))) ; TODO: probably doesn’t make sense to store this here; I can get it by reference via the account ID
 
 (defn ^:private add-text
   "If the file’s mime type is text/plain, retrieves the text and adds it to the file map in :text.

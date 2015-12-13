@@ -10,16 +10,18 @@
 (defmulti synch (fn [account] (-> account :service :slug)))
 
 (defmethod synch "dropbox" [account]
+  (println "syncing" account)
   (dropbox/synchronize! account))
 
 (defmethod synch "google-drive" [account]
+  (println "syncing" account)
   (gdrive/synchronize! account))
 
 (defmethod synch :default [account]
-  (throw (IllegalArgumentException. (str "Unsupported account service " (-> account :service :display-name)))))
+  (throw (IllegalArgumentException. (str "Unsupported service " (-> account :service :display-name)))))
 
-(defn sync-all [user-email]
-  (doseq [account (db/get-accounts user-email)]
+(defn sync-all [accounts]
+  (doseq [account accounts]
     (print "syncing" (-> account :service :display-name) "...")
     (try
       (synch account)
@@ -37,9 +39,10 @@
   ;; to be either stateful or mutable, because they update their :sync-cursor after each synchronization.
   ;; So I made a quick hack to have a single task that gets all accounts from the DB and then syncs them. This
   ;; is inefficient and unclear so needs to be refactored. So, you know, TODO.
-  (let [task (.scheduleAtFixedRate
+  (let [accounts (db/get-accounts "avi@aviflax.com")
+        task (.scheduleAtFixedRate
                executor
-               #(sync-all "avi@aviflax.com")
+               #(sync-all accounts)
                0
                interval-secs
                TimeUnit/SECONDS)]
