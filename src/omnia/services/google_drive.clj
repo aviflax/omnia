@@ -9,11 +9,20 @@
              [db :as db]
              [index :as index]]
             [clojure.string :refer [blank? lower-case]]
+            [ring.util.codec :refer [url-encode]]
             [clj-http.client :as client]))
+
+(def auth "TODO: maybe this should just be in the database"
+  {:type   :oauth2
+   :oauth2 {:start-uri (str "https://accounts.google.com/o/oauth2/v2/auth?"
+                            "scope=" (url-encode "https://www.googleapis.com/auth/drive.readonly")
+                            "&access_type=offline")
+            :token-uri "https://www.googleapis.com/oauth2/v4/token"
+            :grant_type "????"}})
 
 (defn ^:private get-access-token
   [{:keys [refresh-token], {:keys [client-id client-secret]} :service}]
-  (let [url "https://www.googleapis.com/oauth2/v3/token"
+  (let [url (-> auth :oauth2 :token-uri)
         response (client/post url {:form-params {:client_id     client-id
                                                  :client_secret client-secret
                                                  :grant_type    "refresh_token"
@@ -43,7 +52,8 @@
               :mime-type (:mimeType file)
               :omnia-id (lower-case (:id file))             ; lower-case to work around a bug in clucy
               :omnia-account-id (:id account)
-              :omnia-service-name (-> account :service :display-name))) ; TODO: probably doesn’t make sense to store this here; I can get it by reference via the account ID
+              :omnia-service-name (-> account :service :display-name)) ; TODO: might not make sense to store this here; I can get it by reference via the account ID
+  )
 
 (defn ^:private add-text
   "If the file’s mime type is text/plain, retrieves the text and adds it to the file map in :text.

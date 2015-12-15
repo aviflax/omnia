@@ -20,6 +20,11 @@
 (defmethod synch :default [account]
   (throw (IllegalArgumentException. (str "Unsupported service " (-> account :service :display-name)))))
 
+(defn get-auth [service]
+  (condp = (:slug service)
+    "dropbox" dropbox/auth
+    "google-drive" gdrive/auth))
+
 (defn sync-all [accounts]
   (doseq [account accounts]
     (print "syncing" (-> account :service :display-name) "...")

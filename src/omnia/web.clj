@@ -12,7 +12,7 @@
              [core :refer [map->Account]]
              [index :as index]
              [db :as db]]
-            [omnia.services.core :refer [synch]]
+            [omnia.services.core :refer [get-auth synch]]
             [clojure.string :refer [blank? capitalize join split trim]]
             [clj-http.client :as client])
   (:import [java.util UUID]))
@@ -104,18 +104,22 @@
           [:section
            [:h1 "Which type of Account would you like to connect?"]
            [:p [:a {:href "/accounts/connect/dropbox/start"} "Dropbox"]]
-           [:p [:a {:href "/accounts/connect/gdrive/start"} "Google Drive"]]]]))
+           [:p [:a {:href "/accounts/connect/google-drive/start"} "Google Drive"]]]]))
+
+; This is harder than it looks.
+;(defn ^:private build-uri [base & query-fragments]
+;  (str base
+;       (when-not (.contains base "?")
+;           "?")
+;       (join "" query-fragments)))
 
 (defn ^:private accounts-connect-service-start-get [service-slug]
-  (let [ns-sym (symbol (str "omnia.services." service-slug))
-        _ (require ns-sym)
-        service-auth @(ns-resolve ns-sym 'auth)
-        oauth2-start-uri (-> service-auth :oauth2 :start-uri)
-        service (db/get-service service-slug)
+  (let [service (db/get-service service-slug)
+        oauth (-> service get-auth :oauth2)
         client-id (:client-id service)
         callback-uri (str "http://localhost:3000/accounts/connect/" service-slug "/finish")
-        uri (str oauth2-start-uri
-                 "?client_id=" client-id
+        uri (str (:start-uri oauth)
+                 "&client_id=" client-id
                  "&response_type=code"
                  "&redirect_uri=" (url-encode callback-uri)
                  "&state=TODO")]
@@ -126,14 +130,14 @@
                             :body    "Bad request"})
 
 (defn ^:private get-access-token [service-slug auth-code]
-  ;; TODO: generalize this
   (let [service (db/get-service service-slug)
-        url "https://api.dropboxapi.com/1/oauth2/token"]
+        oauth (-> service get-auth :oauth2)
+        url (:token-uri oauth)]
     (client/post url {:form-params           {:client_id     (:client-id service)
                                               :client_secret (:client-secret service)
                                               :code          auth-code
                                               :grant_type    "authorization_code"
-                                              :redirect_uri  "http://localhost:3000/accounts/connect/dropbox/finish"}
+                                              :redirect_uri  (str "http://localhost:3000/accounts/connect/" service-slug "/finish")}
                       :as                    :json
                       :throw-entire-message? true})))
 
@@ -148,34 +152,33 @@
     bad-request
 
     :default
-    (let [access-token-response (get-access-token service-slug auth-code)
-          access-token (-> access-token-response :body :access_token)]
-      (if (blank? access-token)
+    (let [token-response (-> (get-access-token service-slug auth-code) :body)]
+      (if (blank? (:access_token token-response))
           bad-request
           (let [service (db/get-service service-slug)
                 ;; TODO: check the account userid and don’t create a duplicate new account if it’s already connected
                 ;; TODO: should probably include the account userid (e.g. the Dropbox userid) in the account
                 ;; TODO: stop using email to associate accounts with users
-                proto-account (map->Account {:user-email   "avi@aviflax.com"
-                                             :service-slug service-slug
-                                             :access-token access-token})
+                proto-account (map->Account {:user-email    "avi@aviflax.com"
+                                             :service-slug  service-slug
+                                             :access-token  (:access_token token-response)
+                                             :refresh-token (:refresh_token token-response)})
                 account (db/create-account proto-account)]
             (future
               (try (synch account)
                    (catch Exception e (println e))))
             (redirect (str "/accounts/connect/" service-slug "/done") 307))))))
 
-(defn ^:private accounts-connect-service-done-get [_]
-  (html5 [:head
-          [:title "New Account Connected « Omnia"]]
-         [:body
-          (header "Accounts » New Account Connected")
-          [:section
-           ;; TODO: Generalize
-           [:h1 "Your new Dropbox account has been connected!"]
-           [:p "We’ve started indexing your new account in the background. We’ll send you an email when we’re done!"]
-
-           [:p [:a {:href "/accounts"} "Back to Accounts"]]]]))
+(defn ^:private accounts-connect-service-done-get [service-slug]
+  (let [service (db/get-service service-slug)]
+    (html5 [:head
+            [:title "New Account Connected « Omnia"]]
+           [:body
+            (header "Accounts » New Account Connected")
+            [:section
+             [:h1 "Your new " (:display-name service) " account has been connected!"]
+             [:p "We’ve started indexing your new account in the background. We’ll send you an email when we’re done!"]
+             [:p [:a {:href "/accounts"} "Back to Accounts"]]]])))
 
 (defn ^:private account-delete [id]
   ;; TODO: make this async. Sure, I could just wrap it with `future`, but then the user
