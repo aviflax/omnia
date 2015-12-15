@@ -45,7 +45,8 @@
           footer]))
 
 (defn ^:private link [doc]
-  (if (contains? doc :alternateLink)
+  ;; TODO: generalize
+  (if (contains? doc :alternateLink)                        ; google drive uses alternateLink
       (:alternateLink doc)
       (let [path-segments (split (:omnia-id doc) #"/")
             dir-path (join "/" (butlast path-segments))]
