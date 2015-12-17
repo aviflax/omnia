@@ -2,7 +2,10 @@
   (:require [omnia
              [db :as db]
              [index :as index]]
-            [clojure.string :refer [lower-case split]])
+            [omnia.extraction :refer [can-parse?]]
+            [clojure.string :refer [lower-case split]]
+            [pantomime.mime :refer [mime-type-of]]
+            [pantomime.extract :refer [parse]])
   (:import [com.dropbox.core DbxAppInfo DbxRequestConfig DbxWebAuthNoRedirect DbxClient]
            java.util.Locale
            java.io.ByteArrayOutputStream))
@@ -32,39 +35,36 @@
 (defn get-file-content [path client]
   (let [stream (ByteArrayOutputStream.)]
     (.getFile client path nil stream)
-    (str stream)))
-
-(defn should-get-full-text? [file]
-  (or (.endsWith (.path file) ".txt")                       ; TODO: make this much more sophisticated!
-      (.endsWith (.path file) ".md")))
+    (.toByteArray stream)))
 
 (defn should-index? [metadata-entry]
   (and (.isFile metadata-entry)
        (not (some #(.startsWith % ".")
-                  (split (.path metadata-entry) #"/")))
-       (should-get-full-text? metadata-entry)))             ;; TEMP TEMP Just to speed up full-account indexing
+                  (split (.path metadata-entry) #"/")))))
 
-(defn file->doc-with-text
+(defn file->doc
   "Convert a Dropbox file to an Omnia document — with full text.
    TODO: break this into two functions as in Google Drive."
-  [client account file]
-  (let [f (hash-map :name (.name file)
-                    :path (.path file)
-                    ;; TODO: include account ID in omnia-id so as to ensure uniqueness and avoid conflicts
-                    :omnia-id (lower-case (.path file))     ; lower-case to work around a possible bug in clucy
-                    :omnia-account-id (:id account)
-                    :omnia-service-name (-> account :service :display-name))]
-    (if (should-get-full-text? file)
-        (assoc f :text (get-file-content (.path file) client))
-        f)))
+  [account file]
+  {:name               (.name file)
+   :path               (.path file)
+   ;; TODO: include account ID in omnia-id so as to ensure uniqueness and avoid conflicts
+   :omnia-id           (lower-case (.path file))            ; lower-case to work around a possible bug in clucy
+   :omnia-account-id   (:id account)
+   :omnia-service-name (-> account :service :display-name)})
 
 (defn process-delta-entry! [client account entry]
   (if-let [md (.metadata entry)]
     (if (should-index? md)
         (do
           (println "indexing" (.path md))
-          (-> (file->doc-with-text client account md)
-              index/add-or-update))
+          (as-> (file->doc account md) doc
+                (assoc doc :text
+                           (when (can-parse? (mime-type-of (.name md)))
+                                 (-> (get-file-content (.path md) client)
+                                     parse
+                                     :text)))
+                (index/add-or-update doc)))
         (println "skipping" (.path md)))
     (index/delete {:omnia-account-id (:id account)
                    :omnia-id         (lower-case (.lcPath entry))})))
