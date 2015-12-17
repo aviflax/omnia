@@ -9,8 +9,8 @@
 
 (def auth "TODO: maybe this should just be in the database"
   {:type   :oauth2
-   :oauth2 {:start-uri "https://www.dropbox.com/1/oauth2/authorize?foo=bar" ;; stupid but whatever
-            :token-uri "https://api.dropboxapi.com/1/oauth2/token"
+   :oauth2 {:start-uri  "https://www.dropbox.com/1/oauth2/authorize?" ;; stupid but whatever
+            :token-uri  "https://api.dropboxapi.com/1/oauth2/token"
             :grant_type "authorization_code"}})
 
 (defn get-req-config []

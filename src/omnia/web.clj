@@ -120,7 +120,7 @@
         client-id (:client-id service)
         callback-uri (str "http://localhost:3000/accounts/connect/" service-slug "/finish")
         uri (str (:start-uri oauth)
-                 "&client_id=" client-id
+                 "client_id=" client-id
                  "&response_type=code"
                  "&redirect_uri=" (url-encode callback-uri)
                  "&state=TODO")]
