@@ -12,6 +12,8 @@
                  [clj-http "2.0.0"]
                  [cheshire "5.5.0"]
 
+                 [com.novemberain/pantomime "2.8.0"]
+
                  ; web UI stuff
                  [ring/ring-core "1.4.0"]
                  [ring/ring-devel "1.4.0"]
