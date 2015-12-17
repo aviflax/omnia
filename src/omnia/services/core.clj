@@ -44,10 +44,9 @@
   ;; to be either stateful or mutable, because they update their :sync-cursor after each synchronization.
   ;; So I made a quick hack to have a single task that gets all accounts from the DB and then syncs them. This
   ;; is inefficient and unclear so needs to be refactored. So, you know, TODO.
-  (let [accounts (db/get-accounts "avi@aviflax.com")
-        task (.scheduleAtFixedRate
+  (let [task (.scheduleAtFixedRate
                executor
-               #(sync-all accounts)
+               #(sync-all (db/get-accounts "avi@aviflax.com"))
                0
                interval-secs
                TimeUnit/SECONDS)]
