@@ -72,9 +72,7 @@
 (defn synchronize! [{:keys [sync-cursor] :as account}]
   (let [client (get-client account)]
     (loop [cursor sync-cursor]
-      (let [;delta (.getDeltaWithPathPrefix client cursor "/Articles")
-            delta (.getDelta client cursor)
-            ]
+      (let [delta (.getDelta client cursor)]
         (run! (partial process-delta-entry! client account)
               (.entries delta))
 
@@ -85,4 +83,4 @@
 
         ; get more
         (when (.hasMore delta)
-          (recur (.cursor delta)))))))
+              (recur (.cursor delta)))))))
