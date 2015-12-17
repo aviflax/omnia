@@ -16,33 +16,33 @@
             :token-uri  "https://api.dropboxapi.com/1/oauth2/token"
             :grant_type "authorization_code"}})
 
-(defn get-req-config []
+(defn ^:private get-req-config []
   (DbxRequestConfig. "Omnia" (str (Locale/getDefault))))
 
-(defn get-auth [{:keys [key secret]}]
+(defn ^:private get-auth [{:keys [key secret]}]
   (let [app-info (DbxAppInfo. key secret)]
     (DbxWebAuthNoRedirect. (get-req-config) app-info)))
 
-(defn get-auth-init-url [auth] (.start auth))
+(defn ^:private get-auth-init-url [auth] (.start auth))
 
-(defn get-token [auth code]
+(defn ^:private get-token [auth code]
   (.accessToken (.finish auth code)))
 
 ; TODO: should this be reused?
-(defn get-client [{:keys [access-token]}]
+(defn ^:private get-client [{:keys [access-token]}]
   (DbxClient. (get-req-config) access-token))
 
-(defn get-file-content [path client]
+(defn ^:private get-content [path client]
   (let [stream (ByteArrayOutputStream.)]
     (.getFile client path nil stream)
     (.toByteArray stream)))
 
-(defn should-index? [metadata-entry]
+(defn ^:private should-index? [metadata-entry]
   (and (.isFile metadata-entry)
        (not (some #(.startsWith % ".")
                   (split (.path metadata-entry) #"/")))))
 
-(defn file->doc
+(defn ^:private file->doc
   "Convert a Dropbox file to an Omnia document — with full text.
    TODO: break this into two functions as in Google Drive."
   [account file]
@@ -53,7 +53,7 @@
    :omnia-account-id   (:id account)
    :omnia-service-name (-> account :service :display-name)})
 
-(defn process-delta-entry! [client account entry]
+(defn ^:private process-delta-entry! [client account entry]
   (if-let [md (.metadata entry)]
     (if (should-index? md)
         (do
@@ -61,7 +61,7 @@
           (as-> (file->doc account md) doc
                 (assoc doc :text
                            (when (can-parse? (mime-type-of (.name md)))
-                                 (-> (get-file-content (.path md) client)
+                                 (-> (get-content (.path md) client)
                                      parse
                                      :text)))
                 (index/add-or-update doc)))
