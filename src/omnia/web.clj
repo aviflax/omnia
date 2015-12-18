@@ -178,7 +178,7 @@
             (header "Accounts » New Account Connected")
             [:section
              [:h1 "Your new " (:display-name service) " account has been connected!"]
-             [:p "We’ve started indexing your new account in the background. We’ll send you an email when we’re done!"]
+             [:p "We’ve started indexing your new account. We’ll send you an email when we’re done!"]
              [:p [:a {:href "/accounts"} "Back to Accounts"]]]])))
 
 (defn ^:private account-delete [id]
