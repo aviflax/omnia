@@ -45,7 +45,7 @@
           (goget url (assoc account :access-token token) opts))
         response)))
 
-(defn file->doc
+(defn ^:private file->doc
   "Convert a Google Drive file to an Omnia document."
   [account file]
   (assoc file :name (:title file)
@@ -91,16 +91,16 @@
   [changes]
   ;; TODO: handle exceptions, no matches found, etc.
   (when (not (blank? (:nextLink changes)))
-    (-> (re-seq #"pageToken=(\d+)" (:nextLink changes))
-        first
-        second)))
+        (-> (re-seq #"pageToken=(\d+)" (:nextLink changes))
+            first
+            second)))
 
 (defn synchronize! [account]
   (loop [cursor (:sync-cursor account)]
     (let [response (get-changes account cursor)
           changes (:body response)]
       (when (not= (:status response) 200)
-        (throw (Exception. "ruh roh")))
+            (throw (Exception. "ruh roh")))
 
       (run! (partial process-change-item! account)
             (:items changes))
