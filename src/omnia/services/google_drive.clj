@@ -8,8 +8,10 @@
   (:require [omnia
              [db :as db]
              [index :as index]]
+            [omnia.extraction :refer [can-parse?]]
             [clojure.string :refer [blank? lower-case]]
             [ring.util.codec :refer [url-encode]]
+            [pantomime.extract :refer [parse]]
             [clj-http.client :as client]))
 
 (def auth "TODO: maybe this should just be in the database"
@@ -56,18 +58,14 @@
               :omnia-service-name (-> account :service :display-name)) ; TODO: might not make sense to store this here; I can get it by reference via the account ID
   )
 
-(defn ^:private add-text
-  "If the file’s mime type is text/plain, retrieves the text and adds it to the file map in :text.
-  Otherwise returns the file map as-is. TODO: move the filtering elsewhere."
-  [account file]
-  (if (not= (:mimeType file) "text/plain")
-      file
-      (let [response (goget (str "https://www.googleapis.com/drive/v2/files/" (:id file))
-                            account
-                            {:query-params {"alt" "media"}
-                             :as           :stream})
-            text (slurp (:body response))]
-        (assoc file :text text))))
+(defn ^:private get-content [file account]
+  (-> (str "https://www.googleapis.com/drive/v2/files/" (:id file))
+      (goget account
+             {:query-params {"alt" "media"}
+              ; make sure to close the stream after reading it!
+              :as           :stream})
+      ; returns a stream (I guess it’s an InputStream...?)
+      :body))
 
 (defn ^:private get-changes [account cursor]
   (goget "https://www.googleapis.com/drive/v2/changes"
@@ -83,9 +81,13 @@
                      :omnia-id         (lower-case (:fileId item))})
       (let [file (:file item)]
         (println (:title file))
-        (->> (file->doc account file)
-             (add-text account)
-             index/add-or-update))))
+        (-> (file->doc account file)
+            (assoc :text
+                   (when (can-parse? (:mimeType file))
+                         (-> (get-content file account)
+                             parse
+                             :text)))
+            index/add-or-update))))
 
 (defn ^:private next-cursor-from-changes
   [changes]
