@@ -32,6 +32,7 @@
   (DbxClient. (get-req-config) access-token))
 
 (defn ^:private get-content [path client]
+  ;; TODO: using a byte array could be problematic if/when dealing with very large files
   (let [stream (ByteArrayOutputStream.)]
     (.getFile client path nil stream)
     (.toByteArray stream)))
