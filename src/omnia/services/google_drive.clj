@@ -17,10 +17,9 @@
    :oauth2 {:start-uri (str "https://accounts.google.com/o/oauth2/v2/auth?"
                             "scope=" (url-encode "https://www.googleapis.com/auth/drive.readonly")
                             "&access_type=offline"
-                            "&" ;; TEMP TEMP
+                            "&"                             ;; TEMP TEMP
                             )
-            :token-uri "https://www.googleapis.com/oauth2/v4/token"
-            :grant_type "????"}})
+            :token-uri "https://www.googleapis.com/oauth2/v4/token"}})
 
 (defn ^:private get-access-token
   [{:keys [refresh-token], {:keys [client-id client-secret]} :service}]
