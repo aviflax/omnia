@@ -6,7 +6,8 @@
             [clojure.string :refer [lower-case split]]
             [pantomime.mime :refer [mime-type-of]]
             [pantomime.extract :refer [parse]])
-  (:import [com.dropbox.core DbxAppInfo DbxRequestConfig DbxWebAuthNoRedirect DbxClient]
+  (:import [com.dropbox.core DbxAppInfo DbxRequestConfig DbxWebAuthNoRedirect]
+           [com.dropbox.core.v1 DbxClientV1]
            java.util.Locale
            java.io.ByteArrayOutputStream))
 
@@ -29,7 +30,7 @@
 
 ; TODO: should this be reused?
 (defn ^:private get-client [{:keys [access-token]}]
-  (DbxClient. (get-req-config) access-token))
+  (DbxClientV1. (get-req-config) access-token))
 
 (defn ^:private get-content [path client]
   ;; TODO: using a byte array could be problematic if/when dealing with very large files

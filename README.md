@@ -11,7 +11,6 @@ FIXME: description
 * Domain model: rename “file” to “document”
 * Try having the indexer return Document record instances
 * Change `db` to accept/return record instances
-* Upgrade Dropbox SDK to 2.0 when it comes out
 * Ensure that only Business/Domain/Team service accounts can be added (maybe?)
 
 ## Installation
