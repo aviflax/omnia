@@ -27,10 +27,11 @@
 
 (defn ^:private header
   ([] (header ""))
-  ([title]
+  ([& title-segments]
    [:header [:h1 [:a {:href "/"} "Omnia"]
-             (when (not (blank? title))
-               (str " » " title))]]))
+             (when (seq title-segments)
+                   (str " » "
+                        (apply str title-segments)))]]))
 
 (def ^:private footer [:footer [:a {:href "/accounts"} "Manage Accounts"]])
 
@@ -114,17 +115,48 @@
 ;           "?")
 ;       (join "" query-fragments)))
 
-(defn ^:private accounts-connect-service-start-get [service-slug]
-  (let [service (db/get-service service-slug)
-        oauth (-> service get-auth :oauth2)
+(defn ^:private build-service-connect-start-uri [service]
+  (let [oauth (-> service get-auth :oauth2)
         client-id (:client-id service)
-        callback-uri (str "http://localhost:3000/accounts/connect/" service-slug "/finish")
-        uri (str (:start-uri oauth)
-                 "client_id=" client-id
-                 "&response_type=code"
-                 "&redirect_uri=" (url-encode callback-uri)
-                 "&state=TODO")]
-    (redirect uri 307)))
+        callback-uri (str "http://localhost:3000/accounts/connect/" (:slug service) "/finish")]
+    (str (:start-uri oauth)
+         "client_id=" client-id
+         "&response_type=code"
+         "&redirect_uri=" (url-encode callback-uri)
+         "&state=TODO")))
+
+(defn ^:private accounts-connect-service-start-get [service-slug]
+  (if-let [service (db/get-service service-slug)]
+    (let [service-name (:display-name service)
+          next-uri (build-service-connect-start-uri service)]
+      (html5 [:head
+              [:title "Connect a New " service-name " Account « Omnia"]]
+             [:body
+              (header "<a href=\"/accounts\">Accounts</a>")
+              [:h1 "So you want to connect your " service-name " account…"]
+              [:h2 "Here’s the deal:"]
+              [:ul (case (:slug service)
+                     "dropbox"
+                     (seq [[:li "If you choose to continue, we’ll direct you to " service-name ", who will ask you whether
+                            you’d like to give us permission to access your documents."]
+
+                           [:li "Dropbox doesn’t offer a way for us to request read-only access, so if you want us to index
+                            your documents, we’ll need full access to your Dropbox account — but we promise that we will
+                            only ever <i>read</i> your Dropbox data, never write to it."]
+
+                           [:li "And we’ll only index the documents you’ve shared with your entire team and/or company."]])
+
+                     "google-drive"
+                     [:li "TODO: add explanatory text here!"]
+
+                     "Something went wrong here!")]
+              [:p]
+              [:p "Would you like to continue?"]
+              [:ul
+               [:li [:a {:href next-uri} "Continue to " service-name]]
+               [:li [:a {:href "/accounts"} "Never mind"]]]]))
+    {:status 404
+     :body   "Not found, oh no!"}))
 
 (def ^:private bad-request {:status  400
                             :headers {"Content-Type" "text/plain"}
