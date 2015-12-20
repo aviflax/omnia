@@ -38,7 +38,7 @@
 (def executor (ScheduledThreadPoolExecutor. 5))
 (def tasks (atom []))
 
-(defn start-syncing [interval-secs]
+(defn start-syncing [user-email interval-secs]
   ;; I know this seems strange — if I’m only ever creating one task, why
   ;; have a `tasks` var in the plural, containing a vector? Well at first I was creating
   ;; one task per account, so they could sync concurrently. But then I realized that I needed the accounts
@@ -47,7 +47,7 @@
   ;; is inefficient and unclear so needs to be refactored. So, you know, TODO.
   (let [task (.scheduleAtFixedRate
                executor
-               #(sync-all (db/get-accounts "avi@aviflax.com"))
+               #(sync-all (db/get-accounts user-email))
                0
                interval-secs
                TimeUnit/SECONDS)]
