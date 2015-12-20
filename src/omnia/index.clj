@@ -16,6 +16,7 @@
   (map
     #(as-> % result
            ;; TODO: get a useful/relevant snippet from Lucene
+           ;; TODO: as a performance optimization, try not retrieving the full text from the index
            (assoc result :snippet (trunc (:text result) 100))
            (dissoc result :text))
     (clucy/search index q 10)))

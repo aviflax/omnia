@@ -7,6 +7,7 @@ FIXME: description
 * Modify Dropbox and Google Drive Import/Sync to only import docs that should be shared within the org
 * Add pagination to search results
 * Add support for "sessions" i.e. logging in and logging out
+* Improve searching: stemming, searching of file names, etc
 * Domain model: rename “file” to “document”
 * Try having the indexer return Document record instances
 * Change `db` to accept/return record instances

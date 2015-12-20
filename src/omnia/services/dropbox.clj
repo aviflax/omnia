@@ -43,8 +43,7 @@
                   (split (.path metadata-entry) #"/")))))
 
 (defn ^:private file->doc
-  "Convert a Dropbox file to an Omnia document — with full text.
-   TODO: break this into two functions as in Google Drive."
+  "Convert a Dropbox file to an Omnia document."
   [account file]
   {:name               (.name file)
    :path               (.path file)
