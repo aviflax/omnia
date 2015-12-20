@@ -23,7 +23,8 @@
 (defn get-auth [service]
   (condp = (:slug service)
     "dropbox" dropbox/auth
-    "google-drive" gdrive/auth))
+    "google-drive" gdrive/auth
+    nil))
 
 (defn sync-all [accounts]
   (doseq [account accounts]
