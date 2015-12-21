@@ -11,11 +11,13 @@
 
 (defmethod synch "dropbox" [account]
   (println "syncing" account)
-  (dropbox/synchronize! account))
+  (dropbox/synchronize! account)
+  (println "syncing complete"))
 
 (defmethod synch "google-drive" [account]
   (println "syncing" account)
-  (gdrive/synchronize! account))
+  (gdrive/synchronize! account)
+  (println "syncing complete"))
 
 (defmethod synch :default [account]
   (throw (IllegalArgumentException. (str "Unsupported service " (-> account :service :display-name)))))
