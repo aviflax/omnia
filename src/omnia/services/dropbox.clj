@@ -3,11 +3,11 @@
              [db :as db]
              [index :as index]]
             [omnia.extraction :refer [can-parse?]]
-            [clojure.string :refer [lower-case split]]
+            [clojure.string :refer [split]]
             [pantomime.mime :refer [mime-type-of]]
             [pantomime.extract :refer [parse]])
   (:import [com.dropbox.core DbxAppInfo DbxRequestConfig DbxWebAuthNoRedirect]
-           [com.dropbox.core.v1 DbxClientV1]
+           [com.dropbox.core.v2 DbxClientV2 DbxFiles$DeletedMetadata DbxFiles$FileMetadata]
            java.util.Locale
            java.io.ByteArrayOutputStream))
 
@@ -30,57 +30,73 @@
 
 ; TODO: should this be reused?
 (defn ^:private get-client [{:keys [access-token]}]
-  (DbxClientV1. (get-req-config) access-token))
+  (DbxClientV2. (get-req-config) access-token))
 
 (defn ^:private get-content [path client]
   ;; TODO: using a byte array could be problematic if/when dealing with very large files
-  (let [stream (ByteArrayOutputStream.)]
-    (.getFile client path nil stream)
+  (let [download-builder (-> (.files client)
+                             (.downloadBuilder path))
+        stream (ByteArrayOutputStream.)]
+    (.run download-builder stream)
     (.toByteArray stream)))
 
 (defn ^:private should-index? [metadata-entry]
-  (and (.isFile metadata-entry)
-       (not (some #(.startsWith % ".")
-                  (split (.path metadata-entry) #"/")))))
+  (not (some #(.startsWith % ".")
+             (split (.pathLower metadata-entry) #"/"))))
 
 (defn ^:private file->doc
   "Convert a Dropbox file to an Omnia document."
   [account file]
-  {:name               (.name file)
-   :path               (.path file)
+  {:id                 (.id file)
+   :name               (.name file)
+   :path               (.pathLower file)
    ;; TODO: include account ID in omnia-id so as to ensure uniqueness and avoid conflicts
-   :omnia-id           (lower-case (.path file))            ; lower-case to work around a possible bug in clucy
+   :omnia-id           (.pathLower file)
    :omnia-account-id   (:id account)
    :omnia-service-name (-> account :service :display-name)})
 
-(defn ^:private process-delta-entry! [client account entry]
-  (if-let [md (.metadata entry)]
-    (if (should-index? md)
+(defn ^:private process-list-entry! [client account entry]
+  (condp #(= (type %2) %1) entry
+
+    DbxFiles$DeletedMetadata
+    (index/delete {:name             (.name entry)
+                   :omnia-account-id (:id account)
+                   :omnia-id         (.pathLower entry)})
+
+    DbxFiles$FileMetadata
+    (if (should-index? entry)
         (do
-          (println "indexing" (.path md))
-          (as-> (file->doc account md) doc
+          (println "indexing" (.pathLower entry))
+          (as-> (file->doc account entry) doc
                 (assoc doc :text
-                           (when (can-parse? (mime-type-of (.name md)))
-                                 (-> (get-content (.path md) client)
+                           (when (can-parse? (mime-type-of (.name entry)))
+                                 (-> (get-content (.pathLower entry) client)
                                      parse
                                      :text)))
                 (index/add-or-update doc)))
-        (println "skipping" (.path md)))
-    (index/delete {:omnia-account-id (:id account)
-                   :omnia-id         (lower-case (.lcPath entry))})))
+        (println "skipping" (.pathLower entry)))
+
+    :default
+    (println "skipping" (.pathLower entry))))
 
 (defn synchronize! [{:keys [sync-cursor] :as account}]
   (let [client (get-client account)]
     (loop [cursor sync-cursor]
-      (let [delta (.getDelta client cursor)]
-        (run! (partial process-delta-entry! client account)
-              (.entries delta))
+      (let [list-result (if cursor
+                            (-> (.files client)
+                                (.listFolderContinue cursor))
+                            (-> (.files client)
+                                (.listFolderBuilder "")
+                                (.recursive true)
+                                .start))]
+        (run! (partial process-list-entry! client account)
+              (.entries list-result))
 
         ; update account cursor in DB
-        (db/update-account account :sync-cursor (.cursor delta))
+        (db/update-account account :sync-cursor (.cursor list-result))
 
         (Thread/sleep 5)
 
         ; get more
-        (when (.hasMore delta)
-              (recur (.cursor delta)))))))
+        (when (.hasMore list-result)
+              (recur (.cursor list-result)))))))
