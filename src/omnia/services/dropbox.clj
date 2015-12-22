@@ -76,7 +76,6 @@
                 (index/add-or-update doc)))
         (println "skipping" (.pathLower entry)))
 
-    :default
     (println "skipping" (.pathLower entry))))
 
 (defn synchronize! [{:keys [sync-cursor] :as account}]
