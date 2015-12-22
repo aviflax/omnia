@@ -120,7 +120,7 @@
         client-id (:client-id service)
         callback-uri (str "http://localhost:3000/accounts/connect/" (:slug service) "/finish")]
     (str (:start-uri oauth)
-         "client_id=" client-id
+         "&client_id=" client-id
          "&response_type=code"
          "&redirect_uri=" (url-encode callback-uri)
          "&state=TODO")))
@@ -186,6 +186,7 @@
 
     :default
     (let [token-response (-> (get-access-token service-slug auth-code) :body)]
+      ;; TODO: after authorization confirm that the user actually connected a work account (Dropbox)
       (if (blank? (:access_token token-response))
           bad-request
           (let [service (db/get-service service-slug)

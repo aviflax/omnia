@@ -13,7 +13,7 @@
 
 (def auth "TODO: maybe this should just be in the database"
   {:type   :oauth2
-   :oauth2 {:start-uri "https://www.dropbox.com/1/oauth2/authorize?" ;; stupid but whatever
+   :oauth2 {:start-uri "https://www.dropbox.com/1/oauth2/authorize?require_role=work" ;; TODO: after authorization confirm that the user actually connected a work account
             :token-uri "https://api.dropboxapi.com/1/oauth2/token"}})
 
 (defn ^:private get-req-config []
