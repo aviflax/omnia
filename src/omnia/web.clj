@@ -26,14 +26,14 @@
            :autofocus ""}])
 
 (defn ^:private header
-  ([] (header ""))
+  ([] (header nil))
   ([& title-segments]
    [:header [:h1 [:a {:href "/"} "Omnia"]
-             (when (seq title-segments)
+             (when (some some? title-segments)
                    (str " » "
                         (apply str title-segments)))]]))
 
-(def ^:private footer [:footer [:a {:href "/accounts"} "Manage Accounts"]])
+(def ^:private footer [:footer {:style "margin-top: 10em;"} [:a {:href "/accounts"} "Manage Accounts"]])
 
 (defn ^:private handle-index []
   (html5 [:head
