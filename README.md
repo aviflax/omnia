@@ -12,6 +12,7 @@ FIXME: description
 * Try having the indexer return Document record instances
 * Change `db` to accept/return record instances
 * Ensure that only Business/Domain/Team service accounts can be added (maybe?)
+* index file names but not the entire path (e.g. “omnia”)
 
 ## Installation
 

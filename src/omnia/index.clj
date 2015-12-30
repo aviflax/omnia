@@ -32,7 +32,9 @@
 (defn fix-meta [doc]
   (with-meta doc {:omnia-id           {:analyzed false :norms false} ; it’s important not to analyze this because it sometimes contain chars that Lucene by default will split up, e.g. `/`
                   :omnia-account-id   {:analyzed false :norms false} ; not absolutely sure we need this to not be analyzed but probably harmless for now
-                  :omnia-service-name {:analyzed false :norms false}}))
+                  :omnia-service-name {:analyzed false :norms false}
+                  ; don’t want :path to be searchable because of false positives (e.g. `omnia`)
+                  :path               {:analyzed false :norms false}}))
 
 (defn add [doc]
   "Be careful not to accidentally add duplicate entries to the index with this."
