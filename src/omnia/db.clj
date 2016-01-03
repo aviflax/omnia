@@ -110,7 +110,14 @@
    person’s account but not another’s — but YAGNI, you know? For now I’m only gonna support indexing a single folder
    for Dropbox for a given instance of Omnia, and that folder will be the team folder found when the first user
    connects their Dropbox account. BTW another implication of this is that when the last person disconnects the last
-   Dropbox account in the system, we need to then dissasociate the team folder from the Service, at that point — right?"
+   Dropbox account in the system, we need to then dissasociate the team folder from the Service, at that point — right?
+
+   OK a few days later and I’ve decided to hold off on associating these attributes with the Dropbox Service, at this
+   point, for now. Having them associated with the Accounts is sub-optimal, I think, but at the moment it’s more or less
+   working and while it’s not very efficient — this will lead to indexing the same files repeatedly and redundantly —
+   fixing this is more or less a performance optimization, and that’s not where I need to be focusing my efforts right
+   now. I need to focus on functionality and UX right now. And I need velocity. Keeping syncing at the Account level for
+   now means less work for me and also more consistency within the system as that’s how Google Drive works as well."
   [{:db/id                 (d/tempid :db.part/db)
     :db/ident              :dropbox/team-folder-id
     :db/valueType          :db.type/string
