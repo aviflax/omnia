@@ -1,8 +1,9 @@
 (ns omnia.services.dropbox
   (:require [omnia
+             [accounts :refer [Account]]
              [db :as db]
-             [index :as index]]
-            [omnia.extraction :refer [can-parse?]]
+             [index :as index]
+             [extraction :refer [can-parse?]]]
             [clojure.string :refer [split]]
             [pantomime.mime :refer [mime-type-of]]
             [pantomime.extract :refer [parse]])
@@ -76,16 +77,43 @@
                 (index/add-or-update doc)))
         (println "skipping" (.pathLower entry)))
 
+    ; default case — probably a folder.
     (println "skipping" (.pathLower entry))))
 
-(defn synchronize! [{:keys [sync-cursor] :as account}]
+(defn ^:private get-team-folder [client]
+  (when-let [folder (->> client
+                         .sharing
+                         .listFolders
+                         .entries
+                         (filter #(.isTeamFolder %))
+                         first)]
+    {:path (.pathLower folder)
+     :name (.name folder)
+     :id   (.sharedFolderId folder)}))
+
+(defn ^:private init-account [account]
+  "Initialize a Dropbox account. Returns a new “version” of the Account record with additional fields set."
+  (let [client (get-client account)
+        {:keys [id name path]} (get-team-folder client)]
+    (assoc account
+      :team-folder-id id
+      :team-folder-name name
+      :team-folder-path path)))
+
+(defrecord DropboxAccount
+  [id user service access-token sync-cursor team-folder-id  team-folder-name team-folder-path]
+
+  Account
+  (init [account] (init-account account)))
+
+(defn synchronize! [{:keys [sync-cursor team-folder-path] :as account}]
   (let [client (get-client account)]
     (loop [cursor sync-cursor]
       (let [list-result (if cursor
                             (-> (.files client)
                                 (.listFolderContinue cursor))
                             (-> (.files client)
-                                (.listFolderBuilder "")
+                                (.listFolderBuilder team-folder-path)
                                 (.recursive true)
                                 .start))]
         (run! (partial process-list-entry! client account)

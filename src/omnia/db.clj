@@ -101,6 +101,37 @@
     :db.install/_attribute :db.part/db}
    ])
 
+(def dropbox-attributes
+  "These attributes are used by both Accounts and Services. An individual Account will have a Dropbox team folder, but
+   the service will as well. This association lives at the Service level so we don’t sync the same folder multiple
+   times redundantly when multiple users on the same team connect their Dropbox accounts. So wait, I have to wonder —
+   do I really need this to live at the Account level at all? For what purpose? I supposed hypothetically there could
+   be multiple team folders or something like that, or multiple folders I want to sync, some of which show up in one
+   person’s account but not another’s — but YAGNI, you know? For now I’m only gonna support indexing a single folder
+   for Dropbox for a given instance of Omnia, and that folder will be the team folder found when the first user
+   connects their Dropbox account. BTW another implication of this is that when the last person disconnects the last
+   Dropbox account in the system, we need to then dissasociate the team folder from the Service, at that point — right?"
+  [{:db/id                 (d/tempid :db.part/db)
+    :db/ident              :dropbox/team-folder-id
+    :db/valueType          :db.type/string
+    :db/cardinality        :db.cardinality/one
+    :db/doc                "Dropbox Team Folder ID."
+    :db.install/_attribute :db.part/db}
+
+   {:db/id                 (d/tempid :db.part/db)
+    :db/ident              :dropbox/team-folder-name
+    :db/valueType          :db.type/string
+    :db/cardinality        :db.cardinality/one
+    :db/doc                "Dropbox Team Folder name."
+    :db.install/_attribute :db.part/db}
+
+   {:db/id                 (d/tempid :db.part/db)
+    :db/ident              :dropbox/team-folder-path
+    :db/valueType          :db.type/string
+    :db/cardinality        :db.cardinality/one
+    :db/doc                "Dropbox Team Folder path."
+    :db.install/_attribute :db.part/db}])
+
 ; just for reference really (at least for now)
 ;(defn create-db []
 ;  (d/create-database uri)
@@ -132,7 +163,7 @@
     (when-not (nil? (:db/id e))
       (-> e remove-namespace-from-map-keys))))
 
-(defn create-account [{:keys [user-email service-slug access-token refresh-token]}]
+(defn create-account [{:keys [user-email service-slug access-token refresh-token team-folder-id team-folder-name team-folder-path]}]
   (let [tempid (d/tempid :db.part/user)
         proto-account (as-> {} it
                             (assoc it
@@ -143,6 +174,12 @@
                               :account/access-token access-token)
                             (if refresh-token
                                 (assoc it :account/refresh-token refresh-token)
+                                it)
+                            (if (and (= service-slug "dropbox")
+                                     team-folder-id)
+                                (assoc it :dropbox/team-folder-id team-folder-id
+                                          :dropbox/team-folder-name team-folder-name
+                                          :dropbox/team-folder-path team-folder-path)
                                 it))
         tx-result @(d/transact (connect) [proto-account])
         db-after (:db-after tx-result)

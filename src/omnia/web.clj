@@ -8,8 +8,7 @@
             [hiccup.page :refer [html5]]
             [hiccup.form :as f]
             [omnia
-             [accounts :as accounts]
-             [core :refer [map->Account]]
+             [accounts :refer [map->Account init] :as accounts]
              [index :as index]
              [db :as db]]
             [omnia.services.core :refer [get-auth synch]]
@@ -138,13 +137,14 @@
               [:ul (case (:slug service)
                      "dropbox"
                      (seq [[:li "If you choose to continue, we’ll direct you to " service-name ", who will ask you whether
-                            you’d like to give us permission to access your documents."]
+                                 you’d like to give us permission to access your documents."]
 
                            [:li "Dropbox doesn’t offer a way for us to request read-only access, so if you want us to index
-                            your documents, we’ll need full access to your Dropbox account — but we promise that we will
-                            only ever <i>read</i> your Dropbox data, never write to it."]
+                                 your documents, we’ll need full access to your Dropbox account — but we promise that we will
+                                 only ever <i>read</i> your Dropbox data, never write to it."]
 
-                           [:li "And we’ll only index the documents you’ve shared with your entire team and/or company."]])
+                           [:li "And we’ll only index the documents in your “team” folder, which are already shared with
+                                 your entire team/organization."]])
 
                      "google-drive"
                      [:li "TODO: add explanatory text here!"]
@@ -193,11 +193,13 @@
                 ;; TODO: check the account userid and don’t create a duplicate new account if it’s already connected
                 ;; TODO: should probably include the account userid (e.g. the Dropbox userid) in the account
                 ;; TODO: stop using email to associate accounts with users
-                proto-account (map->Account {:user-email    "avi@aviflax.com"
-                                             :service-slug  service-slug
-                                             :access-token  (:access_token token-response)
-                                             :refresh-token (:refresh_token token-response)})
-                account (db/create-account proto-account)]
+                account (-> {:user-email    "avi@aviflax.com"
+                             :service-slug  service-slug
+                             :access-token  (:access_token token-response)
+                             :refresh-token (:refresh_token token-response)}
+                            map->Account
+                            init
+                            db/create-account)]
             (future
               (try (synch account)
                    (catch Exception e (println e))))
