@@ -112,21 +112,25 @@
 ;   Am I adding complexity (transformation) and dulling the advantages of Datomic by doing so?
 
 (defn ^:private remove-namespace-from-map-keys [m]
-  (apply hash-map (interleave (map (comp keyword name)
-                                   (keys m))
-                              (vals m))))
+  (as-> (dissoc m :db/id) m ; we don’t care about :db/id in userland; it’s internal to Datomic. And we don’t want it to overwrite any other attributes with the same name (less namespace)
+        (apply hash-map (interleave (map (comp keyword name)
+                                         (keys m))
+                                    (vals m)))))
 
-(defn ^:private entity->map [entity] (-> (d/touch entity)
-                                         remove-namespace-from-map-keys))
+(defn ^:private entity->map
+  "We need this mainly because Datomic entities don’t support dissoc"
+  [e]
+  (as-> (d/touch e) it
+        (apply hash-map (interleave (keys it) (vals it)))
+        (remove-namespace-from-map-keys it)))
 
-(defn ^:private entity-id->map [db entity-id] (->> (d/entity db entity-id)
-                                                   d/touch
-                                                   remove-namespace-from-map-keys))
+(defn ^:private entity-id->map [db entity-id] (-> (d/entity db entity-id)
+                                                   entity->map))
 
-(defn ^:private get-entity [k v f]
+(defn ^:private get-entity [k v]
   (let [e (d/pull (d/db (connect)) '[*] [k v])]
     (when-not (nil? (:db/id e))
-      (-> e remove-namespace-from-map-keys f))))
+      (-> e remove-namespace-from-map-keys))))
 
 (defn create-account [{:keys [user-email service-slug access-token refresh-token]}]
   (let [tempid (d/tempid :db.part/user)
@@ -150,7 +154,8 @@
           (map->Account it))))
 
 (defn get-account [id]
-  (get-entity :account/id id map->Account))
+  (when-let [e (get-entity :account/id id)]
+    (map->Account e)))
 
 (defn get-accounts [user-email]
   (let [db (d/db (connect))
@@ -175,8 +180,11 @@
                      [{:db/id [:account/id (:id account)]
                        attr   value}]))))
 
+; TODO: check that something was actually retracted, and if not either return an error value or raise an exception
 (defn delete-account [account]
   @(d/transact (connect)
                [[:db.fn/retractEntity [:account/id (:id account)]]]))
 
-(defn get-service [slug] (get-entity :service/slug slug map->Service))
+(defn get-service [slug]
+  (when-let [e (get-entity :service/slug slug)]
+    (map->Service e)))

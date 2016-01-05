@@ -7,6 +7,7 @@
   "Remove the account from the database, all associated documents from the index,
    and let the service know about the disconnect (if it supports it)."
   [account]
+  ; TODO: check the return value and validate it
   (db/delete-account account)
   (index/delete-all-docs-for-account account)
   ;; TODO: revoke access for Google Drive as per https://developers.google.com/identity/protocols/OAuth2WebServer#tokenrevoke
