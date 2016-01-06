@@ -29,12 +29,20 @@
 (defn delete-all-docs-for-account [account]
   (clucy/delete index {:omnia-account-id (:id account)}))
 
+(defn ^:private map-false [& keys]
+  (apply hash-map (interleave keys (repeat false))))
+
 (defn fix-meta [doc]
-  (with-meta doc {:omnia-id           {:analyzed false :norms false} ; it’s important not to analyze this because it sometimes contain chars that Lucene by default will split up, e.g. `/`
-                  :omnia-account-id   {:analyzed false :norms false} ; not absolutely sure we need this to not be analyzed but probably harmless for now
-                  :omnia-service-name {:analyzed false :norms false}
+  (with-meta doc {:omnia-id           (map-false :analyzed :norms :indexed :tokenized) ; it’s important not to analyze this because it sometimes contain chars that Lucene by default will split up, e.g. `/`
+                  :omnia-account-id   (map-false :analyzed :norms) ; not absolutely sure we need this to not be analyzed but probably harmless for now
+                  :omnia-service-name (map-false :analyzed :norms)
                   ; don’t want :path to be searchable because of false positives (e.g. `omnia`)
-                  :path               {:analyzed false :norms false}}))
+                  :path               (map-false :analyzed :norms :indexed :tokenized)
+
+                  ;; SOON
+                  ;; :text               (map-false :stored)
+                  ;; :snippet            (map-false :analyzed :norms :indexed :tokenized)
+                }))
 
 (defn add [doc]
   "Be careful not to accidentally add duplicate entries to the index with this."
