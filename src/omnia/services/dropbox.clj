@@ -73,7 +73,9 @@
                            (when (can-parse? (mime-type-of (.name entry)))
                                  (-> (get-content (.pathLower entry) client)
                                      parse
-                                     :text)))
+                                     :text
+                                     (str (.name entry)) ;; HACK: concatenate the file name to the end of the text so it’ll be included in the search
+                                     )))
                 (index/add-or-update doc)))
         (println "skipping" (.pathLower entry)))
 

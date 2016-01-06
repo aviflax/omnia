@@ -19,7 +19,7 @@
            ;; TODO: as a performance optimization, try not retrieving the full text from the index
            (assoc result :snippet (trunc (:text result) 100))
            (dissoc result :text))
-    (clucy/search index q 10)))
+    (clucy/search index q 10 :default-field :text)))
 
 (defn delete [doc]
   "If the doc isn’t found, this is just a no-op"
