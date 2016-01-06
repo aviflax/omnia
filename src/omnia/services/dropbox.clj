@@ -52,7 +52,7 @@
    :name               (.name file)
    :path               (.pathLower file)
    ;; TODO: include account ID in omnia-id so as to ensure uniqueness and avoid conflicts
-   :omnia-id           (.pathLower file)
+   :omnia-id           (.pathLower file) ; not sure whether/why this needs to be the lowercase form of the path
    :omnia-account-id   (:id account)
    :omnia-service-name (-> account :service :display-name)})
 
