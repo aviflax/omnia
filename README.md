@@ -7,6 +7,7 @@ FIXME: description
 
 ### User-visible
 
+* Index Google Docs, Google Sheets, Google Slides, etc.
 * Modify Google Drive Import/Sync to only import docs that are shared with the entire org
 * Add pagination to search results
 * Add support for "sessions" i.e. logging in and logging out
