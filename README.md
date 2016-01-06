@@ -2,17 +2,23 @@
 
 FIXME: description
 
+
 ## TODO
 
-* Modify Dropbox and Google Drive Import/Sync to only import docs that should be shared within the org
+### User-visible
+
+* Modify Google Drive Import/Sync to only import docs that are shared with the entire org
 * Add pagination to search results
 * Add support for "sessions" i.e. logging in and logging out
-* Improve searching: stemming, searching of file names, etc
+* Improve searching: stemming, etc
+* Ensure that only Business/Domain/Team service accounts can be added (maybe?)
+
+### Non-user-visible
+
 * Domain model: rename “file” to “document”
 * Try having the indexer return Document record instances
 * Change `db` to accept/return record instances
-* Ensure that only Business/Domain/Team service accounts can be added (maybe?)
-* index file names but not the entire path (e.g. “omnia”)
+
 
 ## Installation
 
