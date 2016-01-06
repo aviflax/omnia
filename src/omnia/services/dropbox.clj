@@ -1,6 +1,6 @@
 (ns omnia.services.dropbox
   (:require [omnia
-             [accounts :refer [Account]]
+             [accounts :as accounts]
              [db :as db]
              [index :as index]
              [extraction :refer [can-parse?]]]
@@ -100,10 +100,10 @@
       :team-folder-name name
       :team-folder-path path)))
 
-(defrecord DropboxAccount
+(defrecord Account
   [id user service access-token sync-cursor team-folder-id  team-folder-name team-folder-path]
 
-  Account
+  accounts/Account
   (init [account] (init-account account)))
 
 (defn synchronize! [{:keys [sync-cursor team-folder-path] :as account}]

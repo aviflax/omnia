@@ -25,21 +25,12 @@
   ;(disconnect [account])
   )
 
-(defmulti map->Account #(:service-slug %))
-
-(defmethod map->Account "dropbox" [m]
-  ; This would be much simpler: (dropbox/map->DropboxAccount m)
-  ; But this crazy thing is my current approach to avoiding cyclical
-  ; dependencies at compile time. Probably not a great idea but working for now…?
-  (let [ns-sym (symbol "omnia.services.dropbox")
+(defn map->Account [account-map]
+  ; Something less dynamic (e.g. a direct call to dropbox/map->Account etc using multimethods)
+  ; would probably be simpler, but it would involve cycles.
+  ; So this is my semi-crazy approach to avoiding cyclical
+  ; dependencies at compile time. Probably not a great idea but working for now.
+  (let [ns-sym (symbol (str "omnia.services." (:service-slug account-map)))
         _ (require ns-sym)
-        factory @(ns-resolve ns-sym 'map->DropboxAccount)]
-    (factory m)))
-
-(defmethod map->Account "google-drive" [m]
-  ; This crazy thing is my current approach to avoiding cyclical
-  ; dependencies at compile time. Probably not a great idea but working for now…?
-  (let [ns-sym (symbol "omnia.services.google-drive")
-        _ (require ns-sym)
-        factory @(ns-resolve ns-sym 'map->GoogleDriveAccount)]
-    (factory m)))
+        factory @(ns-resolve ns-sym 'map->Account)]
+    (factory account-map)))

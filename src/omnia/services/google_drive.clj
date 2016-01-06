@@ -6,14 +6,14 @@
    awful Java: millions of classes and factories and builders and awful docs on
    how to actually *use* all that crap."
   (:require [omnia
+             [accounts :as accounts]
              [db :as db]
              [index :as index]]
             [omnia.extraction :refer [can-parse?]]
             [clojure.string :refer [blank? lower-case]]
             [ring.util.codec :refer [url-encode]]
             [pantomime.extract :refer [parse]]
-            [clj-http.client :as client])
-  (:import [omnia.accounts Account]))
+            [clj-http.client :as client]))
 
 (def auth "TODO: maybe this should just be in the database"
   {:type   :oauth2
@@ -115,8 +115,8 @@
         (db/update-account account :sync-cursor (-> changes :largestChangeId bigint int inc str)))))
   nil)
 
-(defrecord GoogleDriveAccount
+(defrecord Account
   [id user service access-token refresh-token sync-cursor]
 
-  Account
+  accounts/Account
   (init [account] account))
