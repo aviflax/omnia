@@ -35,3 +35,11 @@
         _ (require ns-sym)
         factory @(ns-resolve ns-sym 'map->DropboxAccount)]
     (factory m)))
+
+(defmethod map->Account "google-drive" [m]
+  ; This crazy thing is my current approach to avoiding cyclical
+  ; dependencies at compile time. Probably not a great idea but working for now…?
+  (let [ns-sym (symbol "omnia.services.google-drive")
+        _ (require ns-sym)
+        factory @(ns-resolve ns-sym 'map->GoogleDriveAccount)]
+    (factory m)))

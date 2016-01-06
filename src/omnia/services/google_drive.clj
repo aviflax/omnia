@@ -12,7 +12,8 @@
             [clojure.string :refer [blank? lower-case]]
             [ring.util.codec :refer [url-encode]]
             [pantomime.extract :refer [parse]]
-            [clj-http.client :as client]))
+            [clj-http.client :as client])
+  (:import [omnia.accounts Account]))
 
 (def auth "TODO: maybe this should just be in the database"
   {:type   :oauth2
@@ -113,3 +114,9 @@
           (recur next-cursor))
         (db/update-account account :sync-cursor (-> changes :largestChangeId bigint int inc str)))))
   nil)
+
+(defrecord GoogleDriveAccount
+  [id user service access-token refresh-token sync-cursor]
+
+  Account
+  (init [account] account))
