@@ -69,17 +69,17 @@
                            (search-field query)
                            (f/submit-button "Search"))
                 [:section#results
-                 (for [result results]
+                 (for [result results
+                       :let [path-segments (split (:path result) #"/")
+                             path (join "/" (butlast path-segments))]]
                    [:section.result
                     [:h1
                      [:a {:href (link result)}
                       (:name result)]]
-                    [:label.path (:path result)]
+                    [:label.source (-> result :omnia-service-name capitalize-each-word)]
+                    ": "
+                    [:label.path path]
                     [:p.snippet (:snippet result) "…"]
-                    [:label.source
-                     "("
-                     (-> result :omnia-service-name capitalize-each-word)
-                     ")"]
                     [:hr]])]
                 footer]))))
 
