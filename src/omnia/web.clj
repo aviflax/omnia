@@ -77,7 +77,7 @@
                      [:a {:href (link result)}
                       (:name result)]]
                     [:label.source (-> result :omnia-service-name capitalize-each-word)]
-                    ": "
+                    (when-not (blank? path) ": ")
                     [:label.path path]
                     [:p.snippet (:snippet result) "…"]
                     [:hr]])]
