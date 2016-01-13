@@ -18,7 +18,7 @@
   (index/delete-all-docs-for-account account)
   (db/update-account account :sync-cursor nil))
 
-(defprotocol Account                                        ;; TODO: rename to Account, maybe move to ns accounts
+(defprotocol Account
   (init [account])
   ;(connect [account])
   ;(get-doc-changes [account])

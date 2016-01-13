@@ -14,11 +14,8 @@
 ;; what? Maybe YAGNI? Maybe the cost of going so abstract would outweigh the benefit...?
 (defrecord Service [slug display-name client-id client-secret])
 
-(defrecord Account [id user service access-token refresh-token sync-cursor
-                    ; TODO: since the following are specific to Dropbox, should they have a prefix, or be contained
-                    ; inside a composite value, something like `service-specific-things` (ugh)?
-                    team-folder-id
-                    team-folder-name
-                    team-folder-path])
+;; TODO: this is deprecated, remove it. I’m going with the protocol omnia.accounts.Account instead, along with
+;; service-specific implementations of that protocol.
+(defrecord Account [id user service access-token refresh-token sync-cursor])
 
 
