@@ -13,6 +13,7 @@ FIXME: description
 * Add support for "sessions" i.e. logging in and logging out
 * Improve searching: stemming, etc
 * Ensure that only Business/Domain/Team service accounts can be added (maybe?)
+* If there are no accounts/services connected, the home page should say so
 
 ### Non-user-visible
 
