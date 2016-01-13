@@ -104,7 +104,9 @@
 (def dropbox-attributes
   "These attributes are used by both Accounts and Services. An individual Account will have a Dropbox team folder, but
    the service will as well. This association lives at the Service level so we don’t sync the same folder multiple
-   times redundantly when multiple users on the same team connect their Dropbox accounts. So wait, I have to wonder —
+   times redundantly when multiple users on the same team connect their Dropbox accounts.
+
+   So wait, I have to wonder —
    do I really need this to live at the Account level at all? For what purpose? I supposed hypothetically there could
    be multiple team folders or something like that, or multiple folders I want to sync, some of which show up in one
    person’s account but not another’s — but YAGNI, you know? For now I’m only gonna support indexing a single folder
@@ -112,12 +114,28 @@
    connects their Dropbox account. BTW another implication of this is that when the last person disconnects the last
    Dropbox account in the system, we need to then dissasociate the team folder from the Service, at that point — right?
 
-   OK a few days later and I’ve decided to hold off on associating these attributes with the Dropbox Service, at this
-   point, for now. Having them associated with the Accounts is sub-optimal, I think, but at the moment it’s more or less
-   working and while it’s not very efficient — this will lead to indexing the same files repeatedly and redundantly —
-   fixing this is more or less a performance optimization, and that’s not where I need to be focusing my efforts right
-   now. I need to focus on functionality and UX right now. And I need velocity. Keeping syncing at the Account level for
-   now means less work for me and also more consistency within the system as that’s how Google Drive works as well."
+   OK so as of 3 January, here’s where I stand on this: while it’s true that I ultimately only want to maintain the
+   association with and state of the team folder at the service level (although perhaps I could even make the team
+   folder an “entity” and associate services and/or accounts with it) that’s really a performance optimization. I mean,
+   maintaining the data at the account level and syncing the same folder multiple times for a given installation won’t
+   lead to incorrect data — just redundant work. I.E. it’s inefficient. But I can live with runtime inefficiency
+   *for now* — right now my focus needs to be on UX and functionality, not efficiency. And sticking with all syncing
+   being at the account level — for now — lets me keep things simple and consistent across services, for now.
+
+   ----
+
+   On the 4th or the 5th I somehow lost the above paragraph in a stash, and so attempted to rewrite it like so:
+
+   > OK a few days later and I’ve decided to hold off on associating these attributes with the Dropbox Service, at this
+   > point, for now. Having them associated with the Accounts is sub-optimal, I think, but at the moment it’s more or less
+   > working and while it’s not very efficient — this will lead to indexing the same files repeatedly and redundantly —
+   > fixing this is more or less a performance optimization, and that’s not where I need to be focusing my efforts right
+   > now. I need to focus on functionality and UX right now. And I need velocity. Keeping syncing at the Account level for
+   > now means less work for me and also more consistency within the system as that’s how Google Drive works as well.
+
+   I’m retaining both paragraphs for now because one of them might express an idea that the other does not express, or
+   does not express well, and I just don’t have the energy to merge them right now."
+
   [{:db/id                 (d/tempid :db.part/db)
     :db/ident              :dropbox/team-folder-id
     :db/valueType          :db.type/string
