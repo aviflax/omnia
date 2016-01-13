@@ -19,7 +19,7 @@
   (db/update-account account :sync-cursor nil))
 
 (defprotocol Account
-  (init [account])
+  (init [account] "Initialize an Account quickly and synchronously.")
   ;(connect [account])
   ;(get-doc-changes [account])
   ;(disconnect [account])
