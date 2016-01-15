@@ -105,7 +105,8 @@
           [:section
            [:h1 "Which type of Account would you like to connect?"]
            [:p [:a {:href "/accounts/connect/dropbox/start"} "Dropbox"]]
-           [:p [:a {:href "/accounts/connect/google-drive/start"} "Google Drive"]]]]))
+           [:p [:a {:href "/accounts/connect/google-drive/start"} "Google Drive"]]
+           [:p "Do you need to connect a service not shown here? Let us know! {LINK}"]]]))
 
 ; This is harder than it looks.
 ;(defn ^:private build-uri [base & query-fragments]
