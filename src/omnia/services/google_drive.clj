@@ -70,23 +70,39 @@
   (goget "https://www.googleapis.com/drive/v2/changes"
          account
          {:as           :json
-          :query-params (if (blank? cursor)
-                            {}
-                            {"pageToken" (-> cursor bigint int)})}))
+          :query-params (merge
+                          {"includeDeleted" "false"
+                           "maxResults"     1000
+                           ; apparently `fields` is required if we want resulting items to be “full”, and we do, because otherwise we don’t get the “permissions” property
+                           "fields"         "items,largestChangeId,nextLink"}
+                          (when-not (blank? cursor)
+                            {"pageToken" (-> cursor bigint int)}))}))
+
+(defn ^:private should-index? [file account]
+  ;; TODO: Fix hard-coded domain!
+  (boolean
+    (and (some #(and (= (:type %) "domain")
+                     (= (:domain %) "flaxfamily.com"))
+               (or (:permissions file)
+                   []))
+         (not (-> file :labels :trashed)))))
 
 (defn ^:private process-change-item! [account item]
-  (if (:deleted item)
-      (index/delete {:omnia-account-id (:id account)
-                     :omnia-id         (lower-case (:fileId item))})
-      (let [file (:file item)]
-        (println (:title file))
-        (-> (file->doc account file)
-            (assoc :text
-                   (when (can-parse? (:mimeType file))
-                         (-> (get-content file account)
-                             parse
-                             :text)))
-            index/add-or-update))))
+  (cond
+    (:deleted item)
+    (index/delete {:omnia-account-id (:id account)
+                   :omnia-id         (lower-case (:fileId item))})
+
+    (should-index? (:file item) account)
+    (let [file (:file item)]
+      (println (:title file))
+      (-> (file->doc account file)
+          (assoc :text
+                 (when (can-parse? (:mimeType file))
+                       (-> (get-content file account)
+                           parse
+                           :text)))
+          index/add-or-update))))
 
 (defn ^:private next-cursor-from-changes
   [changes]
