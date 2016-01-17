@@ -87,7 +87,7 @@
          account
          {:as           :json
           :query-params (merge
-                          {"includeDeleted" "false"
+                          {"includeDeleted" "true"
                            "maxResults"     1000
                            ; apparently `fields` is required if we want resulting items to be “full”, and we do, because otherwise we don’t get the “permissions” property
                            "fields"         "items,largestChangeId,nextLink"}
