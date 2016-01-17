@@ -98,11 +98,10 @@
   ;; TODO: Fix hard-coded domain!
   (boolean
     (and (not (= (:mimeType file) "application/vnd.google-apps.folder"))
+         (not (-> file :labels :trashed))
          (some #(and (= (:type %) "domain")
                      (= (:domain %) "flaxfamily.com"))
-               (or (:permissions file)
-                   []))
-         (not (-> file :labels :trashed)))))
+               (or (:permissions file) [])))))
 
 (defn ^:private process-change-item! [account item]
   (cond
