@@ -23,7 +23,7 @@
 
 (defn delete [doc]
   "If the doc isn’t found, this is just a no-op"
-  (println "Deleting" (:name doc) "from index, if present")
+  (println "Deleting" (:omnia-id doc) "from index, if present")
   (clucy/delete index (select-keys doc [:omnia-id :omnia-account-id])))
 
 (defn delete-all-docs-for-account [account]
