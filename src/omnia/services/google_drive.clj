@@ -97,7 +97,8 @@
 (defn ^:private should-index? [file account]
   ;; TODO: Fix hard-coded domain!
   (boolean
-    (and (some #(and (= (:type %) "domain")
+    (and (not (= (:mimeType file) "application/vnd.google-apps.folder"))
+         (some #(and (= (:type %) "domain")
                      (= (:domain %) "flaxfamily.com"))
                (or (:permissions file)
                    []))
