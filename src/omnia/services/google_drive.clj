@@ -57,7 +57,16 @@
               :omnia-service-name (-> account :service :display-name)) ; TODO: might not make sense to store this here; I can get it by reference via the account ID
   )
 
-(defn ^:private get-content [file account]
+(defn ^:private get-google-doc-content [file account]
+  (let [download-url (or (get-in file [:exportLinks (keyword "text/plain")])
+                         (get-in file [:exportLinks (keyword "application/pdf")])
+                         nil)]
+    (if download-url
+        (-> (goget download-url account {:as :stream})
+            :body)
+        (throw (Exception. "No download URL found")))))
+
+(defn ^:private get-file-content [file account]
   (-> (str "https://www.googleapis.com/drive/v2/files/" (:id file))
       (goget account
              {:query-params {"alt" "media"}
@@ -65,6 +74,13 @@
               :as           :stream})
       ; returns a stream (I guess it’s an InputStream...?)
       :body))
+
+(defn ^:private get-content
+  "Returns a stream."
+  [file account]
+  (if (empty? (:exportLinks file))
+      (get-file-content file account)
+      (get-google-doc-content file account)))
 
 (defn ^:private get-changes [account cursor]
   (goget "https://www.googleapis.com/drive/v2/changes"
@@ -98,7 +114,8 @@
       (println (:title file))
       (-> (file->doc account file)
           (assoc :text
-                 (when (can-parse? (:mimeType file))
+                 (when (or (can-parse? (:mimeType file))
+                           (not (empty? (:exportLinks file)))) ; if exportLinks has values, it’s probably a Google Docs file, e.g. Google Docs or Google Sheets
                        (-> (get-content file account)
                            parse
                            :text)))
