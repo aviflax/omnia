@@ -1,8 +1,10 @@
 (ns omnia.web
   (:require [ring.adapter.jetty :refer [run-jetty]]
-            [compojure.core :refer [defroutes GET DELETE]]
+            [compojure.core :refer [defroutes routes GET POST DELETE]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.stacktrace :refer [wrap-stacktrace]]
+            [ring.middleware.session :refer [wrap-session]]
+            [ring.middleware.session.cookie :refer [cookie-store]]
             [ring.util.response :refer [redirect]]
             [ring.util.codec :refer [url-encode]]
             [hiccup.page :refer [html5]]
@@ -115,10 +117,10 @@
 ;           "?")
 ;       (join "" query-fragments)))
 
-(defn ^:private build-service-connect-start-uri [service]
+(defn ^:private build-service-auth-start-uri [path-fragment service]
   (let [oauth (-> service get-auth :oauth2)
         client-id (:client-id service)
-        callback-uri (str "http://localhost:3000/accounts/connect/" (:slug service) "/finish")]
+        callback-uri (str "http://localhost:3000/" path-fragment "/" (:slug service) "/finish")]
     (str (:start-uri oauth)
          "&client_id=" client-id
          "&response_type=code"
@@ -128,7 +130,7 @@
 (defn ^:private accounts-connect-service-start-get [service-slug]
   (if-let [service (db/get-service service-slug)]
     (let [service-name (:display-name service)
-          next-uri (build-service-connect-start-uri service)]
+          next-uri (build-service-auth-start-uri "accounts/connect" service)]
       (html5 [:head
               [:title "Connect a New " service-name " Account « Omnia"]]
              [:body
@@ -163,7 +165,7 @@
                             :headers {"Content-Type" "text/plain"}
                             :body    "Bad request"})
 
-(defn ^:private get-access-token [service-slug auth-code]
+(defn ^:private get-access-token [path-fragment service-slug auth-code]
   (let [service (db/get-service service-slug)
         oauth (-> service get-auth :oauth2)
         url (:token-uri oauth)]
@@ -171,7 +173,7 @@
                                               :client_secret (:client-secret service)
                                               :code          auth-code
                                               :grant_type    "authorization_code"
-                                              :redirect_uri  (str "http://localhost:3000/accounts/connect/" service-slug "/finish")}
+                                              :redirect_uri  (str "http://localhost:3000/" path-fragment "/" service-slug "/finish")}
                       :as                    :json
                       :throw-entire-message? true})))
 
@@ -186,7 +188,7 @@
     bad-request
 
     :default
-    (let [token-response (-> (get-access-token service-slug auth-code) :body)]
+    (let [token-response (-> (get-access-token "accounts/connect" service-slug auth-code) :body)]
       ;; TODO: after authorization confirm that the user actually connected a work account (Dropbox)
       (if (blank? (:access_token token-response))
           bad-request
@@ -226,18 +228,116 @@
       accounts/disconnect)
   (redirect "/accounts" 303))
 
-(defroutes routes
-           (GET "/" [] (handle-index))
-           (GET "/search" [q] (handle-search q))
-           (GET "/accounts" [] (accounts-get))
-           (GET "/accounts/connect" [] (accounts-connect-get))
-           (GET "/accounts/connect/:service-slug/start" [service-slug] (accounts-connect-service-start-get service-slug))
-           (GET "/accounts/connect/:service-slug/finish" [service-slug code state] (accounts-connect-service-finish-get service-slug code state))
-           (GET "/accounts/connect/:service-slug/done" [service-slug] (accounts-connect-service-done-get service-slug))
-           (DELETE "/accounts/:id" [id] (account-delete id)))
+(defn ^:private login-get []
+  (html5 [:head
+          [:title "Log in « Omnia"]]
+         [:body
+          (header "Log in")
+          [:section
+           [:h1 "With which service would you like to log in?"]
+           [:p [:a {:href "/login/with/dropbox/start"} "Dropbox"]]
+           [:p [:a {:href "/login/with/google-drive/start"} "Google Drive"]]
+           [:p "Is there some other service not shown here you’d like to use to log in? Let us know! {LINK}"]]]))
+
+(defn ^:private login-start-get [service-slug]
+  (if-let [service (db/get-service service-slug)]
+    (let [service-name (:display-name service)
+          next-uri (build-service-auth-start-uri "login/with" service)]
+      (html5 [:head
+              [:title "Log in with " service-name " « Omnia"]]
+             [:body
+              (header "Log in with " service-name)
+              [:h1 "You want to log in! That’s fantastic!"]
+              [:h2 "Here’s the deal:"]
+              [:ul (case (:slug service)
+                     "dropbox"
+                     (seq [[:li "If you choose to continue, we’ll direct you to " service-name ", who will ask you whether
+                                 you’d like to give us permission to access your documents."]
+
+                           [:li "Dropbox doesn’t offer a way for us to request read-only access, so if you want us to index
+                                 your documents, we’ll need full access to your Dropbox account — but we promise that we will
+                                 only ever <i>read</i> your Dropbox data, never write to it."]
+
+                           [:li "And we’ll only index the documents in your “team” folder, which are already shared with
+                                 your entire team/organization."]])
+
+                     "google-drive"
+                     [:li "TODO: add explanatory text here!"]
+
+                     "Something went wrong here!")]
+              [:p]
+              [:p "Would you like to continue?"]
+              [:ul
+               [:li [:a {:href next-uri} "Continue to " service-name]]
+               [:li [:a {:href "/login"} "Never mind"]]]]))
+    {:status 404
+     :body   "Not found, oh no!"}))
+
+(defn ^:private login-finish-get [service-slug auth-code state]
+  (cond
+    (not= state "TODO")
+    {:status  500                                           ; not actually an internal server error but I don’t want to reveal to an attacker what the problem is
+     :headers {"Content-Type" "text/plain"}
+     :body    "Internal Server Error"}
+
+    (blank? auth-code)
+    bad-request
+
+    :default
+    (let [token-response (-> (get-access-token "login/with" service-slug auth-code) :body)]
+      ;; TODO: after authorization confirm that the user actually connected a work account (Dropbox)
+      (if (blank? (:access_token token-response))
+          bad-request
+          (let [service (db/get-service service-slug)
+                ;; TODO: check the account userid and don’t create a duplicate new account if it’s already connected
+                ;; TODO: should probably include the account userid (e.g. the Dropbox userid) in the account
+                ;; TODO: stop using email to associate accounts with users
+                account (-> {:user-email    "avi@aviflax.com"
+                             :service-slug  service-slug
+                             :access-token  (:access_token token-response)
+                             :refresh-token (:refresh_token token-response)}
+                            map->Account
+                            init
+                            db/create-account)]
+            (future
+              (try (synch account)
+                   (catch Exception e (println e))))
+            ;; TODO: if the account is new, redirect to a page that explains what’s happening.
+            (-> (redirect "/" 307)
+                (assoc-in [:session :user] "TODO")))))))
+
+(defn handle-logout-post []
+  (-> (redirect "/login" 307)
+      (assoc :session nil)))
+
+(defn wrap-restricted [handler]
+  (fn [{session :session :as req}]
+    (if (nil? (:user session))
+        (redirect "/login" 307)
+        (handler req))))
+
+(def restricted-routes
+  (wrap-restricted
+    (routes
+      (GET "/" [] (handle-index))
+      (GET "/search" [q] (handle-search q))
+      (GET "/accounts" [] (accounts-get))
+      (GET "/accounts/connect" [] (accounts-connect-get))
+      (GET "/accounts/connect/:service-slug/start" [service-slug] (accounts-connect-service-start-get service-slug))
+      (GET "/accounts/connect/:service-slug/finish" [service-slug code state] (accounts-connect-service-finish-get service-slug code state))
+      (GET "/accounts/connect/:service-slug/done" [service-slug] (accounts-connect-service-done-get service-slug))
+      (DELETE "/accounts/:id" [id] (account-delete id)))))
+
+(defroutes open-routes
+           (GET "/login" [] (login-get))
+           (GET "/login/with/:service-slug/start" [service-slug] (login-start-get service-slug))
+           (GET "/login/with/:service-slug/finish" [service-slug code state] (login-finish-get service-slug code state))
+           (POST "/logout" [] (handle-logout-post)))
 
 (def app
-  (-> routes
+  (-> (routes open-routes
+              restricted-routes)
+      (wrap-session {:store (cookie-store {:key "a 16-byte secret"})})
       wrap-params
       wrap-stacktrace))
 
