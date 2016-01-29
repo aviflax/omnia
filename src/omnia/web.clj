@@ -314,12 +314,29 @@
               (try (accounts/sync account)
                    (catch Exception e (println e))))
             ;; TODO: if the account is new, redirect to a page that explains what’s happening.
-            (-> (redirect "/" 307)
+            (-> (redirect "/" 303)
                 (assoc-in [:session :user] "TODO")))))))
 
-(defn handle-logout-post []
-  (-> (redirect "/login" 307)
+(defn logout-post []
+  (-> (redirect "/goodbye" 303)
       (assoc :session nil)))
+
+(defn ^:private goodbye-get []
+  (html5 [:head
+          [:title "Goodbye! « Omnia"]]
+         [:body
+          (header "Goodbye!")
+          [:p "Thanks for using Omnia, have a great day!"]
+          [:p
+           "(Did you log out by accident? Sorry about that! "
+           [:a {:href "/login"} "Log back in."]
+           ")"]
+          [:section
+           {:style "margin-top: 3em; border-top: 1px dashed silver;"}
+           [:h1 "BTW"]
+           [:p "Got any questions or suggestions for us?"]
+           [:textarea {:rows 3 :cols 40 :style "display: block;"}]
+           (f/submit-button "Let us know!")]]))
 
 (defn wrap-restricted [handler]
   (fn [{session :session :as req}]
@@ -343,7 +360,8 @@
            (GET "/login" [] (login-get))
            (GET "/login/with/:service-slug/start" [service-slug] (login-start-get service-slug))
            (GET "/login/with/:service-slug/finish" [service-slug code state] (login-finish-get service-slug code state))
-           (POST "/logout" [] (handle-logout-post)))
+           (POST "/logout" [] (logout-post))
+           (GET "/goodbye" [] (goodbye-get)))
 
 (def app
   (-> (routes open-routes
