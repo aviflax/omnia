@@ -1,61 +1,23 @@
-(ns omnia.services.core
-  (:require [omnia.services
-             [dropbox :as dropbox]
-             [google-drive :as gdrive]]
-            [omnia
-             [index :as index]
-             [db :as db]])
-  (:import [java.util.concurrent ScheduledThreadPoolExecutor TimeUnit]))
+(ns omnia.services.core)
 
-(defmulti synch (fn [account] (-> account :service :slug)))
+(defprotocol Service
+  "A low-level object that is used for interacting with a Service outside of the context of a
+  specific user account. Most of the time an omnia.accounts.Account is more useful, but there are
+  a few cases, such as during login/account-connection, when it’s necessary to communicate with a
+  service prior to retrieving/instantiating an omnia.accounts.Account."
 
-(defmethod synch "dropbox" [account]
-  (println "syncing" account)
-  (dropbox/synchronize! account)
-  (println "syncing complete"))
+  (get-auth-uris [service]
+    "Get the URIs needed for authentication")
 
-(defmethod synch "google-drive" [account]
-  (println "syncing" account)
-  (gdrive/synchronize! account)
-  (println "syncing complete"))
+  (get-user-account [service access-token]
+    "Returns a map with the keys :id, :name, :email, all with string values"))
 
-(defmethod synch :default [account]
-  (throw (IllegalArgumentException. (str "Unsupported service " (-> account :service :display-name)))))
-
-(defn get-auth [service]
-  (condp = (:slug service)
-    "dropbox" dropbox/auth
-    "google-drive" gdrive/auth
-    nil))
-
-(defn sync-all [accounts]
-  (doseq [account accounts]
-    (print "syncing" (-> account :service :display-name) "...")
-    (try
-      (synch account)
-      (println "done.")
-      (catch Exception e
-        (println "caught exception: " e)))))
-
-(def executor (ScheduledThreadPoolExecutor. 5))
-(def tasks (atom []))
-
-(defn start-syncing [user-email interval-secs]
-  ;; I know this seems strange — if I’m only ever creating one task, why
-  ;; have a `tasks` var in the plural, containing a vector? Well at first I was creating
-  ;; one task per account, so they could sync concurrently. But then I realized that I needed the accounts
-  ;; to be either stateful or mutable, because they update their :sync-cursor after each synchronization.
-  ;; So I made a quick hack to have a single task that gets all accounts from the DB and then syncs them. This
-  ;; is inefficient and unclear so needs to be refactored. So, you know, TODO.
-  (let [task (.scheduleAtFixedRate
-               executor
-               #(sync-all (db/get-accounts user-email))
-               0
-               interval-secs
-               TimeUnit/SECONDS)]
-    (swap! tasks conj task)))
-
-(defn stop-syncing []
-  (doseq [task @tasks]
-    (.cancel task false))
-  (reset! tasks []))
+(defn map->Service [service-map]
+  ; Something less dynamic (e.g. a direct call to dropbox/map->Account etc using multimethods)
+  ; would probably be simpler, but it would involve cycles.
+  ; So this is my semi-crazy approach to avoiding cyclical
+  ; dependencies at compile time. Probably not a great idea but working for now.
+  (let [ns-sym (symbol (str "omnia.services." (:slug service-map)))
+        _ (require ns-sym)
+        factory @(ns-resolve ns-sym 'map->Service)]
+    (factory service-map)))

@@ -1,6 +1,8 @@
 (ns omnia.db
   (require [datomic.api :as d]
-           [omnia.core :refer [map->Account map->Service map->User]]))
+           [omnia.core :refer [map->User]]
+           [omnia.accounts.core :refer [map->Account]]
+           [omnia.services.core :refer [map->Service]]))
 
 (def ^:private uri "datomic:free://localhost:4334/omnia")   ;; TODO: move to config
 
@@ -59,10 +61,10 @@
   "An Account is a linked Account for a specific User for a given Service."
   [{:db/id                 (d/tempid :db.part/db)
     :db/ident              :account/id
-    :db/valueType          :db.type/uuid
+    :db/valueType          :db.type/string
     :db/cardinality        :db.cardinality/one
     :db/unique             :db.unique/identity
-    :db/doc                "The ID of an Account."
+    :db/doc                "The ID of an Account. A composite value: {service-slug}/{id of account in service}."
     :db.install/_attribute :db.part/db}
 
    {:db/id                 (d/tempid :db.part/db)
@@ -137,6 +139,13 @@
    does not express well, and I just don’t have the energy to merge them right now."
 
   [{:db/id                 (d/tempid :db.part/db)
+    :db/ident              :dropbox/team-id
+    :db/valueType          :db.type/string
+    :db/cardinality        :db.cardinality/one
+    :db/doc                "Dropbox Team ID. Used to ensure that only the members of this team can log in to this instance of Omnia."
+    :db.install/_attribute :db.part/db}
+
+   {:db/id                 (d/tempid :db.part/db)
     :db/ident              :dropbox/team-folder-id
     :db/valueType          :db.type/string
     :db/cardinality        :db.cardinality/one
@@ -168,7 +177,7 @@
 ;   Am I adding complexity (transformation) and dulling the advantages of Datomic by doing so?
 
 (defn ^:private remove-namespace-from-map-keys [m]
-  (as-> (dissoc m :db/id) m ; we don’t care about :db/id in userland; it’s internal to Datomic. And we don’t want it to overwrite any other attributes with the same name (less namespace)
+  (as-> (dissoc m :db/id) m                                 ; we don’t care about :db/id in userland; it’s internal to Datomic. And we don’t want it to overwrite any other attributes with the same name (less namespace)
         (apply hash-map (interleave (map (comp keyword name)
                                          (keys m))
                                     (vals m)))))
@@ -181,19 +190,31 @@
         (remove-namespace-from-map-keys it)))
 
 (defn ^:private entity-id->map [db entity-id] (-> (d/entity db entity-id)
-                                                   entity->map))
+                                                  entity->map))
 
-(defn ^:private get-entity [k v]
+(defn ^:private pull-entity [k v]
   (let [e (d/pull (d/db (connect)) '[*] [k v])]
     (when-not (nil? (:db/id e))
       (-> e remove-namespace-from-map-keys))))
 
-(defn create-account [{:keys [user-email service-slug access-token refresh-token team-folder-id team-folder-name team-folder-path]}]
+(defn ^:private account-entity->map [e]
+  (-> (entity->map e)
+      (assoc
+        :user (entity-id->map (d/entity-db e) (get-in e [:account/user :db/id]))
+        :service (entity-id->map (d/entity-db e) (get-in e [:account/service :db/id])))))
+
+(defn account-id [service-slug service-account-id]
+  "Accepts a service-slug and a the ID of a user account in its source service and returns an Omnia
+  account ID for use with DB lookups."
+  (str service-slug "/" service-account-id))
+
+(defn create-account [{:keys [id user-email service-slug access-token refresh-token
+                              team-folder-id team-folder-name team-folder-path]}]
   (let [tempid (d/tempid :db.part/user)
         proto-account (as-> {} it
                             (assoc it
                               :db/id tempid
-                              :account/id (d/squuid)
+                              :account/id id
                               :account/user [:user/email user-email]
                               :account/service [:service/slug service-slug]
                               :account/access-token access-token)
@@ -216,8 +237,8 @@
           (map->Account it))))
 
 (defn get-account [id]
-  (when-let [e (get-entity :account/id id)]
-    (map->Account e)))
+  (when-let [e (d/entity (d/db (connect)) [:account/id id])]
+    (-> e account-entity->map map->Account)))
 
 (defn get-accounts [user-email]
   (let [db (d/db (connect))
@@ -228,11 +249,13 @@
                        [?service :service/name]
                        [?account :account/service ?service]]
                      db user-email)]
-    (map (fn [result]
-           (-> (entity-id->map db (first result))
-               (assoc :service (entity-id->map db (second result)))
-               (dissoc :user)))
-         results)))
+    (map
+      ;; TODO: use account-entity->map instead of this anonyomous function
+      (fn [result]
+        (-> (entity-id->map db (first result))
+            (assoc :service (entity-id->map db (second result)))
+            (dissoc :user)))
+      results)))
 
 (defn update-account [account key value]
   (let [attr (keyword "account" (name key))]
@@ -242,11 +265,13 @@
                      [{:db/id [:account/id (:id account)]
                        attr   value}]))))
 
-; TODO: check that something was actually retracted, and if not either return an error value or raise an exception
 (defn delete-account [account]
+  ; TODO: check that something was actually retracted, and if not either return an error value or raise an exception
   @(d/transact (connect)
                [[:db.fn/retractEntity [:account/id (:id account)]]]))
 
 (defn get-service [slug]
-  (when-let [e (get-entity :service/slug slug)]
+  (when-let [e (pull-entity :service/slug slug)]
     (map->Service e)))
+
+

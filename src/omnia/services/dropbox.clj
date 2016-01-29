@@ -1,37 +1,26 @@
 (ns omnia.services.dropbox
   (:require [omnia
-             [accounts :as accounts]
              [db :as db]
              [index :as index]
              [extraction :refer [can-parse?]]]
+            [omnia.accounts.core :as accounts]
+            [omnia.services.core :as services]
             [clojure.string :refer [split]]
             [pantomime.mime :refer [mime-type-of]]
             [pantomime.extract :refer [parse]])
-  (:import [com.dropbox.core DbxAppInfo DbxRequestConfig DbxWebAuthNoRedirect]
+  (:import com.dropbox.core.DbxRequestConfig
            [com.dropbox.core.v2 DbxClientV2 DbxFiles$DeletedMetadata DbxFiles$FileMetadata]
            java.util.Locale
            java.io.ByteArrayOutputStream))
 
-(def auth "TODO: maybe this should just be in the database"
+(def ^:private auth "TODO: maybe this should just be in the database"
   {:type   :oauth2
    :oauth2 {:start-uri "https://www.dropbox.com/1/oauth2/authorize?require_role=work" ;; TODO: after authorization confirm that the user actually connected a work account
             :token-uri "https://api.dropboxapi.com/1/oauth2/token"}})
 
-(defn ^:private get-req-config []
-  (DbxRequestConfig. "Omnia" (str (Locale/getDefault))))
-
-(defn ^:private get-auth [{:keys [key secret]}]
-  (let [app-info (DbxAppInfo. key secret)]
-    (DbxWebAuthNoRedirect. (get-req-config) app-info)))
-
-(defn ^:private get-auth-init-url [auth] (.start auth))
-
-(defn ^:private get-token [auth code]
-  (.accessToken (.finish auth code)))
-
-; TODO: should this be reused?
-(defn ^:private get-client [{:keys [access-token]}]
-  (DbxClientV2. (get-req-config) access-token))
+(defn ^:private get-client [access-token]
+  (DbxClientV2. (DbxRequestConfig. "Omnia" (str (Locale/getDefault)))
+                access-token))
 
 (defn ^:private get-content [path client]
   ;; TODO: using a byte array could be problematic if/when dealing with very large files
@@ -52,7 +41,7 @@
    :name               (.name file)
    :path               (.pathLower file)
    ;; TODO: include account ID in omnia-id so as to ensure uniqueness and avoid conflicts
-   :omnia-id           (.pathLower file) ; not sure whether/why this needs to be the lowercase form of the path
+   :omnia-id           (.pathLower file)                    ; not sure whether/why this needs to be the lowercase form of the path
    :omnia-account-id   (:id account)
    :omnia-service-name (-> account :service :display-name)})
 
@@ -74,7 +63,7 @@
                                  (-> (get-content (.pathLower entry) client)
                                      parse
                                      :text
-                                     (str (.name entry)) ;; HACK: concatenate the file name to the end of the text so it’ll be included in the search
+                                     (str (.name entry))    ;; HACK: concatenate the file name to the end of the text so it’ll be included in the search
                                      )))
                 (index/add-or-update doc)))
         (println "skipping" (.pathLower entry)))
@@ -95,21 +84,28 @@
 
 (defn ^:private init-account [account]
   "Initialize a Dropbox account. Returns a new “version” of the Account record with additional fields set."
-  (let [client (get-client account)
+  (let [client (get-client (:access-token account))
         {:keys [id name path]} (get-team-folder client)]
     (assoc account
       :team-folder-id id
       :team-folder-name name
       :team-folder-path path)))
 
-(defrecord Account
-  [id user service access-token sync-cursor team-folder-id  team-folder-name team-folder-path]
+(defn ^:private get-user [access-token]
+  (as-> (get-client access-token) it
+        (.users it)
+        (.getCurrentAccount it)
+        {:id    (.accountId it)
+         :name  (.name it)
+         :email (.email it)}))
 
-  accounts/Account
-  (init [account] (init-account account)))
+(defrecord Service [display-name client-id client-secret]
+  services/Service
+  (get-auth-uris [_] auth)
+  (get-user-account [_ access-token] (get-user access-token)))
 
-(defn synchronize! [{:keys [sync-cursor team-folder-path] :as account}]
-  (let [client (get-client account)]
+(defn ^:private synchronize! [{:keys [access-token sync-cursor team-folder-path] :as account}]
+  (let [client (get-client access-token)]
     (loop [cursor sync-cursor]
       (let [list-result (if cursor
                             (-> (.files client)
@@ -129,3 +125,10 @@
         ; get more
         (when (.hasMore list-result)
               (recur (.cursor list-result)))))))
+
+(defrecord Account
+  [id user service access-token sync-cursor team-folder-id team-folder-name team-folder-path]
+
+  accounts/Account
+  (init [account] (init-account account))
+  (sync [account] (synchronize! account)))

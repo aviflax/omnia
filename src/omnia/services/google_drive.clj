@@ -6,7 +6,7 @@
    awful Java: millions of classes and factories and builders and awful docs on
    how to actually *use* all that crap."
   (:require [omnia
-             [accounts :as accounts]
+             [core :as accounts]
              [db :as db]
              [index :as index]]
             [omnia.extraction :refer [can-parse?]]

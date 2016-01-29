@@ -10,10 +10,11 @@
             [hiccup.page :refer [html5]]
             [hiccup.form :as f]
             [omnia
-             [accounts :refer [map->Account init] :as accounts]
              [index :as index]
              [db :as db]]
-            [omnia.services.core :refer [get-auth synch]]
+            [omnia.accounts.core :refer [map->Account init] :as accounts]
+            [omnia.accounts.util :as accounts.util]
+            [omnia.services.core :refer [get-auth-uris get-user-account]]
             [clojure.string :refer [blank? capitalize join split trim]]
             [clj-http.client :as client])
   (:import [java.util UUID]))
@@ -34,7 +35,12 @@
                    (str " » "
                         (apply str title-segments)))]]))
 
-(def ^:private footer [:footer {:style "margin-top: 10em;"} [:a {:href "/accounts"} "Manage Accounts"]])
+(def ^:private footer
+  [:footer
+   {:style "margin-top: 10em;"}
+   [:a {:href "/accounts"} "Manage Accounts"]
+   (f/form-to [:post "/logout"]
+              (f/submit-button "Log out"))])
 
 (defn ^:private handle-index []
   (html5 [:head
@@ -118,7 +124,7 @@
 ;       (join "" query-fragments)))
 
 (defn ^:private build-service-auth-start-uri [path-fragment service]
-  (let [oauth (-> service get-auth :oauth2)
+  (let [oauth (-> service get-auth-uris :oauth2)
         client-id (:client-id service)
         callback-uri (str "http://localhost:3000/" path-fragment "/" (:slug service) "/finish")]
     (str (:start-uri oauth)
@@ -167,7 +173,7 @@
 
 (defn ^:private get-access-token [path-fragment service-slug auth-code]
   (let [service (db/get-service service-slug)
-        oauth (-> service get-auth :oauth2)
+        oauth (-> service get-auth-uris :oauth2)
         url (:token-uri oauth)]
     (client/post url {:form-params           {:client_id     (:client-id service)
                                               :client_secret (:client-secret service)
@@ -204,7 +210,7 @@
                             init
                             db/create-account)]
             (future
-              (try (synch account)
+              (try (accounts/sync account)
                    (catch Exception e (println e))))
             (redirect (str "/accounts/connect/" service-slug "/done") 307))))))
 
@@ -225,7 +231,7 @@
   ;; I’ll need some way to mark an account as “disconnect in progress”
   (-> (UUID/fromString id)
       db/get-account
-      accounts/disconnect)
+      accounts.util/disconnect)
   (redirect "/accounts" 303))
 
 (defn ^:private login-get []
@@ -284,23 +290,28 @@
     bad-request
 
     :default
-    (let [token-response (-> (get-access-token "login/with" service-slug auth-code) :body)]
+    (let [token-response (-> (get-access-token "login/with" service-slug auth-code) :body)
+          access-token (:access_token token-response)]
       ;; TODO: after authorization confirm that the user actually connected a work account (Dropbox)
-      (if (blank? (:access_token token-response))
+      (if (blank? access-token)
           bad-request
           (let [service (db/get-service service-slug)
+                user-account (get-user-account service access-token)
+                omnia-account-id (db/account-id service-slug (:id user-account))
                 ;; TODO: check the account userid and don’t create a duplicate new account if it’s already connected
                 ;; TODO: should probably include the account userid (e.g. the Dropbox userid) in the account
                 ;; TODO: stop using email to associate accounts with users
-                account (-> {:user-email    "avi@aviflax.com"
-                             :service-slug  service-slug
-                             :access-token  (:access_token token-response)
-                             :refresh-token (:refresh_token token-response)}
-                            map->Account
-                            init
-                            db/create-account)]
+                account (or (db/get-account omnia-account-id)
+                            (-> {:id            omnia-account-id
+                                 :user          (select-keys user-account [:email])
+                                 :service       {:slug service-slug}
+                                 :access-token  access-token
+                                 :refresh-token (:refresh_token token-response)}
+                                map->Account
+                                init
+                                db/create-account))]
             (future
-              (try (synch account)
+              (try (accounts/sync account)
                    (catch Exception e (println e))))
             ;; TODO: if the account is new, redirect to a page that explains what’s happening.
             (-> (redirect "/" 307)
