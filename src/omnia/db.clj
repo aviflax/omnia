@@ -219,22 +219,18 @@
 (defn create-account [{:keys [id user service access-token refresh-token
                               team-folder-id team-folder-name team-folder-path]}]
   (let [tempid (d/tempid :db.part/user)
-        proto-account (as-> {} it
-                            (assoc it
-                              :db/id tempid
-                              :account/id id
-                              :account/user [:user/id (:id user)]
-                              :account/service [:service/slug (:slug service)]
-                              :account/access-token access-token)
-                            (if refresh-token
-                                (assoc it :account/refresh-token refresh-token)
-                                it)
-                            (if (and (= (:slug service) "dropbox")
-                                     team-folder-id)
-                                (assoc it :dropbox/team-folder-id team-folder-id
-                                          :dropbox/team-folder-name team-folder-name
-                                          :dropbox/team-folder-path team-folder-path)
-                                it))
+        proto-account (merge {:db/id                tempid
+                              :account/id           id
+                              :account/user         [:user/id (:id user)]
+                              :account/service      [:service/slug (:slug service)]
+                              :account/access-token access-token}
+                             (when refresh-token
+                                   {:account/refresh-token refresh-token})
+                             (when (and (= (:slug service) "dropbox")
+                                        team-folder-id)
+                                   {:dropbox/team-folder-id   team-folder-id
+                                    :dropbox/team-folder-name team-folder-name
+                                    :dropbox/team-folder-path team-folder-path}))
         tx-result @(d/transact (connect) [proto-account])
         db-after (:db-after tx-result)
         entity-id (d/resolve-tempid db-after (:tempids tx-result) tempid)
@@ -305,9 +301,9 @@
   ;; TODO: prevent creation of duplicate users
   (let [id (d/squuid)
         tx-result @(d/transact (connect)
-                            [{:db/id      (d/tempid :db.part/user)
-                              :user/id    id
-                              :user/email email
-                              :user/name  name}])
+                               [{:db/id      (d/tempid :db.part/user)
+                                 :user/id    id
+                                 :user/email email
+                                 :user/name  name}])
         db-after (:db-after tx-result)]
     (pull-entity db-after :user/id id)))
