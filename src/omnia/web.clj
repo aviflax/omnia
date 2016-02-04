@@ -42,7 +42,7 @@
    (f/form-to [:post "/logout"]
               (f/submit-button "Log out"))])
 
-(defn ^:private handle-index []
+(defn ^:private index-get []
   (html5 [:head
           [:title "Omnia"]]
          [:body
@@ -91,14 +91,14 @@
                     [:hr]])]
                 footer]))))
 
-(defn ^:private accounts-get []
+(defn ^:private accounts-get [{user :user :as session}]
   (html5 [:head
           [:title "Accounts « Omnia"]
           [:style "form { display: inline; margin-left: 1em;}"]]
          [:body
           (header "Accounts")
           [:ul
-           (for [account (db/get-accounts "avi@aviflax.com")
+           (for [account (db/get-accounts (:email user))
                  :let [service (:service account)]]
              [:li (:display-name service)
               (f/form-to [:delete (str "/accounts/" (:id account))]
@@ -298,13 +298,16 @@
           (let [service (db/get-service service-slug)
                 user-account (get-user-account service access-token)
                 omnia-account-id (db/account-id service-slug (:id user-account))
-                ;; TODO: check the account userid and don’t create a duplicate new account if it’s already connected
+                existing-omnia-user (db/get-user {:email      (:email user-account)
+                                                  :account-id omnia-account-id})
+                new-omnia-user (when-not existing-omnia-user
+                                 (db/create-user user-account))
+                omnia-user (or existing-omnia-user new-omnia-user)
                 ;; TODO: should probably include the account userid (e.g. the Dropbox userid) in the account
-                ;; TODO: stop using email to associate accounts with users
                 account (or (db/get-account omnia-account-id)
                             (-> {:id            omnia-account-id
-                                 :user          (select-keys user-account [:email])
-                                 :service       {:slug service-slug}
+                                 :user          omnia-user
+                                 :service       service
                                  :access-token  access-token
                                  :refresh-token (:refresh_token token-response)}
                                 map->Account
@@ -313,9 +316,22 @@
             (future
               (try (accounts/sync account)
                    (catch Exception e (println e))))
-            ;; TODO: if the account is new, redirect to a page that explains what’s happening.
-            (-> (redirect "/" 303)
-                (assoc-in [:session :user] "TODO")))))))
+            (-> (redirect (if new-omnia-user "/welcome" "/")
+                          303)
+                (assoc-in [:session :user] omnia-user)))))))
+
+(defn ^:private welcome-get []
+  ;; TODO: this is pretty duplicative with index-get
+  (html5 [:head
+          [:title "Welcome to Omnia!"]]
+         [:body
+          (header)
+          [:h1 "Welcome to Omnia!"]
+          [:p "We’re so happy to have you here. MORE FRIENDLY HELP HERE!!!"]
+          (f/form-to [:get "/search"]
+                     (search-field "")
+                     (f/submit-button "Search"))
+          footer]))
 
 (defn logout-post []
   (-> (redirect "/goodbye" 303)
@@ -347,9 +363,10 @@
 (def restricted-routes
   (wrap-restricted
     (routes
-      (GET "/" [] (handle-index))
+      (GET "/" [] (index-get))
+      (GET "/welcome" [] (welcome-get))
       (GET "/search" [q] (handle-search q))
-      (GET "/accounts" [] (accounts-get))
+      (GET "/accounts" req (accounts-get (:session req)))
       (GET "/accounts/connect" [] (accounts-connect-get))
       (GET "/accounts/connect/:service-slug/start" [service-slug] (accounts-connect-service-start-get service-slug))
       (GET "/accounts/connect/:service-slug/finish" [service-slug code state] (accounts-connect-service-finish-get service-slug code state))

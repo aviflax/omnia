@@ -6,23 +6,24 @@
    awful Java: millions of classes and factories and builders and awful docs on
    how to actually *use* all that crap."
   (:require [omnia
-             [core :as accounts]
              [db :as db]
              [index :as index]]
+            [omnia.accounts.core :as accounts]
+            [omnia.services.core :as services]
             [omnia.extraction :refer [can-parse?]]
             [clojure.string :refer [blank? lower-case]]
             [ring.util.codec :refer [url-encode]]
             [pantomime.extract :refer [parse]]
             [clj-http.client :as client]))
 
-(def auth "TODO: maybe this should just be in the database"
+(def ^:private auth "TODO: maybe this should just be in the database"
   {:type   :oauth2
    :oauth2 {:start-uri (str "https://accounts.google.com/o/oauth2/v2/auth?"
-                            "scope=" (url-encode "https://www.googleapis.com/auth/drive.readonly")
+                            "scope=" (url-encode "openid profile email https://www.googleapis.com/auth/drive.readonly")
                             "&access_type=offline")
             :token-uri "https://www.googleapis.com/oauth2/v4/token"}})
 
-(defn ^:private get-access-token
+(defn ^:private get-new-access-token
   [{:keys [refresh-token], {:keys [client-id client-secret]} :service}]
   (let [url (-> auth :oauth2 :token-uri)
         response (client/post url {:form-params {:client_id     client-id
@@ -39,7 +40,7 @@
   (let [response (client/get url (assoc opts :throw-exceptions false
                                              :oauth-token access-token))]
     (if (= (:status response) 401)
-        (let [token (get-access-token account)]
+        (let [token (get-new-access-token account)]
           (println "got new access token" token " so updating account in DB")
           (db/update-account account :access-token token)
           (println "trying again with new access token" token)
@@ -148,8 +149,23 @@
         (db/update-account account :sync-cursor (-> changes :largestChangeId bigint int inc str)))))
   nil)
 
+(defn ^:private get-user [access-token]
+  (as-> (goget "https://www.googleapis.com/plus/v1/people/me"
+               {:access-token access-token} ; TODO: HACK
+               {:as :json}) it
+        (:body it)
+        {:id    (:id it)
+         :name  (:displayName it)
+         :email (get-in it [:emails 0 :value])}))
+
+(defrecord Service [display-name client-id client-secret]
+  services/Service
+  (get-auth-uris [_] auth)
+  (get-user-account [_ access-token] (get-user access-token)))
+
 (defrecord Account
   [id user service access-token refresh-token sync-cursor]
 
   accounts/Account
-  (init [account] account))
+  (init [account] account)
+  (sync [account] (synchronize! account)))

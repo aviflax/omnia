@@ -10,11 +10,19 @@
 
 (def user-schema
   [{:db/id                 (d/tempid :db.part/db)
+    :db/ident              :user/id
+    :db/valueType          :db.type/uuid
+    :db/cardinality        :db.cardinality/one
+    :db/unique             :db.unique/identity
+    :db/doc                "The unique identifier for a user."
+    :db.install/_attribute :db.part/db}
+
+   {:db/id                 (d/tempid :db.part/db)
     :db/ident              :user/email
     :db/valueType          :db.type/string
     :db/cardinality        :db.cardinality/one
     :db/unique             :db.unique/identity
-    :db/doc                "The email address of a User. Long-term I’d rather not rely on email addresses but for now it’s fine."
+    :db/doc                "The email address of a User."
     :db.install/_attribute :db.part/db}
 
    {:db/id                 (d/tempid :db.part/db)
@@ -192,10 +200,10 @@
 (defn ^:private entity-id->map [db entity-id] (-> (d/entity db entity-id)
                                                   entity->map))
 
-(defn ^:private pull-entity [k v]
-  (let [e (d/pull (d/db (connect)) '[*] [k v])]
+(defn ^:private pull-entity [db k v]
+  (let [e (d/pull db '[*] [k v])]
     (when-not (nil? (:db/id e))
-      (-> e remove-namespace-from-map-keys))))
+      (remove-namespace-from-map-keys e))))
 
 (defn ^:private account-entity->map [e]
   (-> (entity->map e)
@@ -208,20 +216,20 @@
   account ID for use with DB lookups."
   (str service-slug "/" service-account-id))
 
-(defn create-account [{:keys [id user-email service-slug access-token refresh-token
+(defn create-account [{:keys [id user service access-token refresh-token
                               team-folder-id team-folder-name team-folder-path]}]
   (let [tempid (d/tempid :db.part/user)
         proto-account (as-> {} it
                             (assoc it
                               :db/id tempid
                               :account/id id
-                              :account/user [:user/email user-email]
-                              :account/service [:service/slug service-slug]
+                              :account/user [:user/id (:id user)]
+                              :account/service [:service/slug (:slug service)]
                               :account/access-token access-token)
                             (if refresh-token
                                 (assoc it :account/refresh-token refresh-token)
                                 it)
-                            (if (and (= service-slug "dropbox")
+                            (if (and (= (:slug service) "dropbox")
                                      team-folder-id)
                                 (assoc it :dropbox/team-folder-id team-folder-id
                                           :dropbox/team-folder-name team-folder-name
@@ -271,7 +279,35 @@
                [[:db.fn/retractEntity [:account/id (:id account)]]]))
 
 (defn get-service [slug]
-  (when-let [e (pull-entity :service/slug slug)]
+  (when-let [e (pull-entity (d/db (connect)) :service/slug slug)]
     (map->Service e)))
 
+(defn get-user [{:keys [email account-id]
+                 :or   {email "", account-id ""}
+                 :as   criteria}]
+  (let [db (d/db (connect))
+        email-result (d/q '[:find ?user
+                            :in $ ?email
+                            :where [?user :user/email ?email]]
+                          db email)
+        account-result (d/q '[:find ?user
+                              :in $ ?account-id
+                              :where [?account :account/user ?user]
+                              [?account :account/id ?account-id]]
+                            db account-id)
+        result (or (seq email-result)
+                   (seq account-result))]
+    (when result
+          (->> (ffirst result)
+               (entity-id->map db)))))
 
+(defn create-user [{:keys [name email]}]
+  ;; TODO: prevent creation of duplicate users
+  (let [id (d/squuid)
+        tx-result @(d/transact (connect)
+                            [{:db/id      (d/tempid :db.part/user)
+                              :user/id    id
+                              :user/email email
+                              :user/name  name}])
+        db-after (:db-after tx-result)]
+    (pull-entity db-after :user/id id)))
