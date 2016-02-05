@@ -105,6 +105,7 @@
           [:a {:href "/accounts/connect"} "Connect a New Account"]]))
 
 (defn ^:private accounts-connect-get []
+  ;; TODO: only show services that the user doesn’t already have connected
   (html5 [:head
           [:title "Connect a New Account « Omnia"]]
          [:body
@@ -182,7 +183,7 @@
                       :as                    :json
                       :throw-entire-message? true})))
 
-(defn ^:private accounts-connect-service-finish-get [service-slug auth-code state]
+(defn ^:private accounts-connect-service-finish-get [session service-slug auth-code state]
   (cond
     (not= state "TODO")
     {:status  500                                           ; not actually an internal server error but I don’t want to reveal to an attacker what the problem is
@@ -193,17 +194,21 @@
     bad-request
 
     :default
-    (let [token-response (-> (get-access-token "accounts/connect" service-slug auth-code) :body)]
-      ;; TODO: after authorization confirm that the user actually connected a work account (Dropbox)
+    (let [token-response (-> (get-access-token "accounts/connect" service-slug auth-code)
+                             :body)]
       (if (blank? (:access_token token-response))
           bad-request
-          (let [service (db/get-service service-slug)
+          (let [access-token (:access_token token-response)
+                service (db/get-service service-slug)
+                user-account (get-user-account service access-token)
+                omnia-account-id (db/account-id service-slug (:id user-account))
+                ;; TODO: confirm that the user actually connected a work account (Dropbox)
                 ;; TODO: check the account userid and don’t create a duplicate new account if it’s already connected
                 ;; TODO: should probably include the account userid (e.g. the Dropbox userid) in the account
-                ;; TODO: stop using email to associate accounts with users
-                account (-> {:user-email    "avi@aviflax.com"
-                             :service-slug  service-slug
-                             :access-token  (:access_token token-response)
+                account (-> {:id            omnia-account-id
+                             :user          (:user session)
+                             :service       service
+                             :access-token  access-token
                              :refresh-token (:refresh_token token-response)}
                             map->Account
                             init
@@ -365,10 +370,12 @@
       (GET "/" [] (index-get))
       (GET "/welcome" [] (welcome-get))
       (GET "/search" [q] (handle-search q))
-      (GET "/accounts" req (accounts-get (:session req)))
+      (GET "/accounts" {session :session} (accounts-get session))
       (GET "/accounts/connect" [] (accounts-connect-get))
       (GET "/accounts/connect/:service-slug/start" [service-slug] (accounts-connect-service-start-get service-slug))
-      (GET "/accounts/connect/:service-slug/finish" [service-slug code state] (accounts-connect-service-finish-get service-slug code state))
+      (GET "/accounts/connect/:service-slug/finish" [service-slug code state
+                                                     :as {session :session}]
+        (accounts-connect-service-finish-get session service-slug code state))
       (GET "/accounts/connect/:service-slug/done" [service-slug] (accounts-connect-service-done-get service-slug))
       (DELETE "/accounts/:id" [id] (account-delete id)))))
 
