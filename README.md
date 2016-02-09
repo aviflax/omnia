@@ -8,10 +8,10 @@ FIXME: description
 ### User-visible
 
 * Add pagination to search results
-* Add support for "sessions" i.e. logging in and logging out
 * Improve searching: stemming, etc
 * Ensure that only Business/Domain/Team service accounts can be added (maybe?)
 * If there are no accounts/services connected, the home page should say so
+* If a user disconnects their last account they should be logged out
 * Google Drive: Find a way to detect when a file has been un-shared and un-index it
 
 ### Non-user-visible
