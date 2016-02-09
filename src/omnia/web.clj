@@ -100,7 +100,7 @@
            (for [account (db/get-accounts (:email user))
                  :let [service (:service account)]]
              [:li (:display-name service)
-              (f/form-to [:delete (str "/accounts/" (:id account))]
+              (f/form-to [:delete (str "/accounts/" (url-encode (:id account)))]
                          (f/submit-button "Disconnect"))])]
           [:a {:href "/accounts/connect"} "Connect a New Account"]]))
 
@@ -233,8 +233,7 @@
   ;; TODO: make this async. Sure, I could just wrap it with `future`, but then the user
   ;; would navigate back to /accounts and would still see the account they asked to disconnect.
   ;; I’ll need some way to mark an account as “disconnect in progress”
-  (-> (UUID/fromString id)
-      db/get-account
+  (-> (db/get-account id)
       accounts.util/disconnect)
   (redirect "/accounts" 303))
 
