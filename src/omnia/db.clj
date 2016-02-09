@@ -242,23 +242,23 @@
 
 (defn get-account [id]
   (when-let [e (d/entity (d/db (connect)) [:account/id id])]
-    (-> e account-entity->map map->Account)))
+    (-> e
+        account-entity->map
+        map->Account)))
 
 (defn get-accounts [user-email]
   (let [db (d/db (connect))
-        results (d/q '[:find ?account ?service
+        results (d/q '[:find ?account
                        :in $ ?user-email
                        :where [?user :user/email ?user-email]
-                       [?account :account/user ?user]
-                       [?service :service/name]
-                       [?account :account/service ?service]]
+                       [?account :account/user ?user]]
                      db user-email)]
     (map
-      ;; TODO: use account-entity->map instead of this anonyomous function
       (fn [result]
-        (-> (entity-id->map db (first result))
-            (assoc :service (entity-id->map db (second result)))
-            (dissoc :user)))
+        (->> (first result)
+             (d/entity db)
+             account-entity->map
+             map->Account))
       results)))
 
 (defn update-account [account key value]
