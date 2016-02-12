@@ -67,7 +67,7 @@
 (defn ^:private handle-search [query]
   (if (blank? (trim query))
       (redirect "/" 307)
-      (let [results (doall (index/search query))]
+      (let [results (index/search query)]
         (html5 [:head
                 [:title "Search for “" query "” « Omnia"]]
                [:body
@@ -97,12 +97,13 @@
           [:style "form { display: inline; margin-left: 1em;}"]]
          [:body
           (header "Accounts")
-          [:ul
-           (for [account (db/get-accounts (:email user))
-                 :let [service (:service account)]]
-             [:li (:display-name service)
-              (f/form-to [:delete (str "/accounts/" (url-encode (:id account)))]
-                         (f/submit-button "Disconnect"))])]
+          (if-let [accounts (seq (db/get-accounts (:email user)))]
+            [:ul
+             (for [account accounts]
+               [:li (-> account :service :display-name)
+                (f/form-to [:delete (str "/accounts/" (url-encode (:id account)))]
+                           (f/submit-button "Disconnect"))])]
+            [:p "Oh no! You have no accounts connected! You should definitely connect one!"])
           [:a {:href "/accounts/connect"} "Connect a New Account"]]))
 
 (defn ^:private accounts-connect-get []
@@ -356,7 +357,10 @@
            [:h1 "BTW"]
            [:p "Got any questions or suggestions for us?"]
            [:textarea {:rows 3 :cols 40 :style "display: block;"}]
-           (f/submit-button "Let us know!")]]))
+           [:p "Would it be OK for us to follow up with you?"]
+           [:p "If so, please enter your email address: "
+            (f/email-field "email")]
+           (f/submit-button "Fire away!")]]))
 
 (defn wrap-restricted [handler]
   (fn [{session :session :as req}]
