@@ -3,13 +3,13 @@
   :url "http://example.com/FIXME"
   :license {:name "TBD"
             :url "TBD"}
-  :dependencies [[org.clojure/clojure "1.7.0"]
+  :dependencies [[org.clojure/clojure "1.8.0"]
                  [com.datomic/datomic-free "0.9.5206"]      ; not available on clojars or maven central; must be added to local maven repository cache thingy
-                 [com.dropbox.core/dropbox-core-sdk "2.0-beta-4" :exclusions [com.fasterxml.jackson.core/jackson-core]]
                  [clojurewerkz/elastisch "2.2.1"]
+                 [com.dropbox.core/dropbox-core-sdk "2.0-beta-5" :exclusions [com.fasterxml.jackson.core/jackson-core]]
 
                  ; HTTP client stuff
-                 [clj-http "2.0.0"]
+                 [clj-http "2.0.1"]
                  [cheshire "5.5.0"]
 
                  [com.novemberain/pantomime "2.8.0"]
@@ -23,7 +23,7 @@
 
                  ; these deps are not used directly but I’m specifying them to address conflicts
                  [commons-codec "1.10"]
-                 [joda-time "2.8.2"]]
+                 [joda-time "2.9.2"]]
   :main omnia.core
   :target-path "target/%s"
   :profiles {:dev {:dependencies [[cursive/datomic-stubs "0.9.5153" :scope "provided"]]}
