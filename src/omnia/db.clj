@@ -271,6 +271,11 @@
 
 (defn delete-account [account]
   ; TODO: check that something was actually retracted, and if not either return an error value or raise an exception
+  ; TODO: it might be better to just mark the account as logically deleted, rather than actually
+  ; retract it, because retracting it means (AFAIK) the only way to query it or for it to factor
+  ; in to queries is to “travel back in time” (in the Datomic sense) which is super-cool but also
+  ; maybe a bit awkward and unweildy — especially if one doesn’t know *when* to travel back in
+  ; time *to*.
   @(d/transact (connect)
                [[:db.fn/retractEntity [:account/id (:id account)]]]))
 
