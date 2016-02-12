@@ -1,10 +1,27 @@
 (ns omnia.index
-  "TODO: maybe rework the semantics of the add/update API… I’ve had issues wherein a doc wasn’t being deleted even
-  though it *was* in the index. To be clear, that was my fault, due to a bug I introduced. Still, it’d be nice if that
-  case would result in throwing an exception rather than adding a duplicate entry to the index."
-  (:require [clucy.core :as clucy]))
+  (:refer-clojure :exclude [replace])
+  (:require [clojure.string :refer [replace]]
+            [clojurewerkz.elastisch.rest :as esr]
+            [clojurewerkz.elastisch.rest.index :as esi]
+            [clojurewerkz.elastisch.rest.document :as esd]
+            [clojurewerkz.elastisch.query :as q]))
 
-(def ^:private index (clucy/disk-index "data/lucene"))
+(defn ^:private connect [] (esr/connect "http://127.0.0.1:9200"))
+
+(defn ^:private create-index []
+  (esi/create
+    (connect)
+    "omnia"
+    :mappings {"document" {:dynamic    false                ; services include all sorts of crazy things
+                           :properties {:text             {:type     "string"
+                                                           :store    "yes"
+                                                           :analyzer "standard"}
+                                        :omnia-id         {:type  "string"
+                                                           :store "yes"
+                                                           :index "not_analyzed"}
+                                        :omnia-account-id {:type  "string"
+                                                           :store "yes"
+                                                           :index "not_analyzed"}}}}))
 
 (defn ^:private trunc
   [s n]
@@ -19,38 +36,42 @@
            ;; TODO: as a performance optimization, try not retrieving the full text from the index
            (assoc result :snippet (trunc (:text result) 100))
            (dissoc result :text))
-    (clucy/search index q 10 :default-field :text)))
+    (->> (esd/search (connect)
+                     "omnia"
+                     "document"
+                     :query (q/term :text q))
+         :hits
+         :hits
+         (map :_source))))
 
 (defn delete [doc]
   "If the doc isn’t found, this is just a no-op"
   (println "Deleting" (:omnia-id doc) "from index, if present")
-  (clucy/delete index (select-keys doc [:omnia-id :omnia-account-id])))
+  (esd/delete (connect) "omnia" "document" (:omnia-id doc)))
 
 (defn delete-all-docs-for-account [account]
-  (clucy/delete index {:omnia-account-id (:id account)}))
+  ;; TODO: This should really use esd/delete-by-query but I was having trouble with it. I suspect
+  ;; this might be due to the version incompatibility between the current version of Elastisch and
+  ;; ElasticSearch I’m using. TBD.
+  (let [conn (connect)
+        ids (->> (esd/search conn
+                             "omnia"
+                             "document"
+                             :query (q/term :omnia-account-id (:id account)))
+                 :hits
+                 :hits
+                 (map :_id))]
+    (run! #(esd/delete conn "omnia" "document" %)
+          ids)))
 
-(defn ^:private map-false [& keys]
-  (apply hash-map (interleave keys (repeat false))))
-
-(defn fix-meta [doc]
-  (with-meta doc {:omnia-id           (map-false :analyzed :norms :indexed :tokenized) ; it’s important not to analyze this because it sometimes contain chars that Lucene by default will split up, e.g. `/`
-                  :omnia-account-id   (map-false :analyzed :norms) ; not absolutely sure we need this to not be analyzed but probably harmless for now
-                  :omnia-service-name (map-false :analyzed :norms)
-                  ; don’t want :path to be searchable because of false positives (e.g. `omnia`)
-                  :path               (map-false :analyzed :norms :indexed :tokenized)
-
-                  ;; SOON
-                  ;; :text               (map-false :stored)
-                  ;; :snippet            (map-false :analyzed :norms :indexed :tokenized)
-                }))
-
-(defn add [doc]
-  "Be careful not to accidentally add duplicate entries to the index with this."
-  (println "Indexing" (:name doc) "from" (:omnia-service-name doc))
-  (clucy/add index (fix-meta doc)))
+(defn ^:private fixup-doc-keys [doc]
+  "ElasticSearch doesn’t allow certain chars in field names, such as periods. But some services,
+   such as Google Drive, sometimes return fields with those characters in their names. This fn
+   will remove all such characters and replace them with dashes."
+  (zipmap (map (comp keyword #(replace % #"\." "-") name)
+               (keys doc))
+          (vals doc)))
 
 (defn add-or-update [doc]
-  "First the doc is deleted — which is a noop if the doc’s not in the index. Then it’s added.
-   Yes, this is how you do updates in Lucene."
-  (delete doc)
-  (add doc))
+  ;(println "Indexing" (dissoc doc :text))
+  (esd/put (connect) "omnia" "document" (:omnia-id doc) (fixup-doc-keys doc)))

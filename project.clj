@@ -5,8 +5,8 @@
             :url "TBD"}
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [com.datomic/datomic-free "0.9.5206"]      ; not available on clojars or maven central; must be added to local maven repository cache thingy
-                 [clucy "0.4.0"]
                  [com.dropbox.core/dropbox-core-sdk "2.0-beta-4" :exclusions [com.fasterxml.jackson.core/jackson-core]]
+                 [clojurewerkz/elastisch "2.2.1"]
 
                  ; HTTP client stuff
                  [clj-http "2.0.0"]
