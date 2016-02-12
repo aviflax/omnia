@@ -186,9 +186,9 @@
 
 (defn ^:private remove-namespace-from-map-keys [m]
   (as-> (dissoc m :db/id) m                                 ; we don’t care about :db/id in userland; it’s internal to Datomic. And we don’t want it to overwrite any other attributes with the same name (less namespace)
-        (apply hash-map (interleave (map (comp keyword name)
-                                         (keys m))
-                                    (vals m)))))
+        (zipmap (map (comp keyword name)
+                     (keys m))
+                (vals m))))
 
 (defn ^:private entity->map
   "We need this mainly because Datomic entities don’t support dissoc"
