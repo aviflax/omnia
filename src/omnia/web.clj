@@ -77,7 +77,8 @@
                            (f/submit-button "Search"))
                 [:section#results
                  (for [result results
-                       :let [path-segments (split (:path result) #"/")
+                       :let [path (:path result)
+                             path-segments (when path (split path #"/"))
                              path (join "/" (butlast path-segments))]]
                    [:section.result
                     [:h1
