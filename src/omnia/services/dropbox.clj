@@ -96,7 +96,7 @@
         (.users it)
         (.getCurrentAccount it)
         {:id    (.accountId it)
-         :name  (.name it)
+         :name  (-> it .name .displayName)
          :email (.email it)}))
 
 (defrecord Service [display-name client-id client-secret]
