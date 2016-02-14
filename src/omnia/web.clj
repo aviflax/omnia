@@ -87,7 +87,7 @@
                     [:label.source (-> result :omnia-service-name capitalize-each-word)]
                     (when-not (blank? path) ": ")
                     [:label.path path]
-                    [:p.snippet (:snippet result) "…"]
+                    [:p.highlight (:highlight result) "…"]
                     [:hr]])]
                 footer]))))
 

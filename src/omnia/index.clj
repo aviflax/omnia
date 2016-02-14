@@ -14,7 +14,7 @@
     "omnia"
     :mappings {"document" {:dynamic    false                ; services include all sorts of crazy things
                            :properties {:text             {:type   "string"
-                                                           :store  "yes"
+                                                           :store  "no" ; why store the text twice (as a field and in the _source)
                                                            :fields {:english {:type     "string"
                                                                               :analyzer "english"}}}
                                         :omnia-id         {:type  "string"
@@ -23,12 +23,6 @@
                                         :omnia-account-id {:type  "string"
                                                            :store "yes"
                                                            :index "not_analyzed"}}}}))
-
-(defn ^:private trunc
-  [s n]
-  (if (nil? s)
-      ""
-      (subs s 0 (min (count s) n))))
 
 (defn ^:private multi-match-query
   "Multi-Match Query. This isn’t included in Elastisch for some reason.
@@ -40,19 +34,18 @@
                  :fields fields}})
 
 (defn search [q]
-  (map
-    #(as-> % result
-           ;; TODO: get a useful/relevant snippet from ElasticSearch
-           ;; TODO: as a performance optimization, try not retrieving the full text from the index
-           (assoc result :snippet (trunc (:text result) 100))
-           (dissoc result :text))
-    (->> (esd/search (connect)
-                     "omnia"
-                     "document"
-                     :query (multi-match-query [:text :text.english] q))
-         :hits
-         :hits
-         (map :_source))))
+  (as-> (esd/search (connect)
+                    "omnia"
+                    "document"
+                    :query (multi-match-query [:text :text.english] q)
+                    :highlight {:fields    {:text {:fragment_size 150, :number_of_fragments 1}}
+                                :pre_tags  ["<b>"]
+                                :post_tags ["</b>"]}
+                    :_source {:exclude [:text]}) result
+        (get-in result [:hits :hits])
+        (map #(assoc (:_source %)
+               :highlight (get-in % [:highlight :text 0]))
+             result)))
 
 (defn delete [doc]
   "If the doc isn’t found, this is just a no-op"
