@@ -13,9 +13,10 @@
     (connect)
     "omnia"
     :mappings {"document" {:dynamic    false                ; services include all sorts of crazy things
-                           :properties {:text             {:type     "string"
-                                                           :store    "yes"
-                                                           :analyzer "standard"}
+                           :properties {:text             {:type   "string"
+                                                           :store  "yes"
+                                                           :fields {:english {:type     "string"
+                                                                              :analyzer "english"}}}
                                         :omnia-id         {:type  "string"
                                                            :store "yes"
                                                            :index "not_analyzed"}
@@ -29,17 +30,26 @@
       ""
       (subs s 0 (min (count s) n))))
 
+(defn ^:private multi-match-query
+  "Multi-Match Query. This isn’t included in Elastisch for some reason.
+
+  For more information, please refer to https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-multi-match-query.html"
+  [fields query & args]
+  {:multi_match {:type   :most_fields
+                 :query  query
+                 :fields fields}})
+
 (defn search [q]
   (map
     #(as-> % result
-           ;; TODO: get a useful/relevant snippet from Lucene
+           ;; TODO: get a useful/relevant snippet from ElasticSearch
            ;; TODO: as a performance optimization, try not retrieving the full text from the index
            (assoc result :snippet (trunc (:text result) 100))
            (dissoc result :text))
     (->> (esd/search (connect)
                      "omnia"
                      "document"
-                     :query (q/term :text q))
+                     :query (multi-match-query [:text :text.english] q))
          :hits
          :hits
          (map :_source))))
