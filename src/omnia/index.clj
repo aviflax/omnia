@@ -51,7 +51,9 @@
 (defn delete [doc]
   "If the doc isn’t found, this is just a no-op"
   (println "Deleting" (:omnia-id doc) "from index, if present")
-  (esd/delete (connect) "omnia" "document" (:omnia-id doc)))
+  (esd/delete (connect) "omnia" "document" (:omnia-id doc))
+  ; return nil so other components don’t come to rely on the specific results of ElasticSearch
+  nil)
 
 (defn delete-all-docs-for-account [account]
   ;; TODO: This should really use esd/delete-by-query but I was having trouble with it. I suspect
@@ -66,16 +68,12 @@
                  :hits
                  (map :_id))]
     (run! #(esd/delete conn "omnia" "document" %)
-          ids)))
-
-(defn ^:private fixup-doc-keys [doc]
-  "ElasticSearch doesn’t allow certain chars in field names, such as periods. But some services,
-   such as Google Drive, sometimes return fields with those characters in their names. This fn
-   will remove all such characters and replace them with dashes."
-  (zipmap (map (comp keyword #(replace % #"\." "-") name)
-               (keys doc))
-          (vals doc)))
+          ids))
+  ; return nil so other components don’t come to rely on the specific results of ElasticSearch
+  nil)
 
 (defn add-or-update [doc]
-  ;(println "Indexing" (dissoc doc :text))
-  (esd/put (connect) "omnia" "document" (:omnia-id doc) (fixup-doc-keys doc)))
+  (println "Indexing" (dissoc doc :text))
+  (esd/put (connect) "omnia" "document" (:omnia-id doc) doc)
+  ; return nil so other components don’t come to rely on the specific results of ElasticSearch
+  nil)
