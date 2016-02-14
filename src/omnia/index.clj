@@ -38,13 +38,14 @@
                     "omnia"
                     "document"
                     :query (multi-match-query [:text :text.english] q)
-                    :highlight {:fields    {:text {:fragment_size 150, :number_of_fragments 1}}
+                    :highlight {:fields    {:text* {:fragment_size 150, :number_of_fragments 1}}
                                 :pre_tags  ["<b>"]
                                 :post_tags ["</b>"]}
                     :_source {:exclude [:text]}) result
         (get-in result [:hits :hits])
         (map #(assoc (:_source %)
-               :highlight (get-in % [:highlight :text 0]))
+               :highlight (or (get-in % [:highlight :text.english 0])
+                              (get-in % [:highlight :text 0])))
              result)))
 
 (defn delete [doc]
