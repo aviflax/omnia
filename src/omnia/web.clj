@@ -64,31 +64,52 @@
         (map capitalize it)
         (join " " it)))
 
-(defn ^:private handle-search [query]
+(defn ^:private pagination-links [query total current-page per-page]
+  (let [num-pages (-> (/ total per-page) Math/ceil int)]
+    [:ol#pagination
+     (for [page-num (range 1 (inc num-pages))]
+       [:li
+        (if (= page-num current-page)
+            current-page
+            [:a {:href (str "/search?q=" query
+                            "&page=" page-num
+                            "&per-page=" per-page)}
+             page-num])
+        ])]))
+
+(defn ^:private search-get [query page-num per-page]
   (if (blank? (trim query))
       (redirect "/" 307)
-      (let [results (index/search query)]
+      (let [result (index/search query page-num per-page)
+            total (:total result)]
         (html5 [:head
-                [:title "Search for “" query "” « Omnia"]]
+                [:title "Search for “" query "” « Omnia"]
+                [:style "p#total { font-size: smaller; }
+                         section.result { margin: 20px 0; }
+                         section.result * { margin: 2px 0; padding: 0; }
+                         ol#pagination { padding: 0; }
+                         ol#pagination li { list-style-type: none; display: inline; padding-right: 10px; }"]]
                [:body
                 (header)
                 (f/form-to [:get "/search"]
                            (search-field query)
                            (f/submit-button "Search"))
+                [:p#total (when (> total 20) "About ")
+                 total " result" (when (not= total 1) "s")]
                 [:section#results
-                 (for [result results
-                       :let [path (:path result)
+                 (for [hit (:hits result)
+                       :let [path (:path hit)
                              path-segments (when path (split path #"/"))
                              path (join "/" (butlast path-segments))]]
                    [:section.result
                     [:h1
-                     [:a {:href (link result)}
-                      (:name result)]]
-                    [:label.source (-> result :omnia-service-name capitalize-each-word)]
+                     [:a {:href (link hit)}
+                      (:name hit)]]
+                    [:label.source (-> hit :omnia-service-name capitalize-each-word)]
                     (when-not (blank? path) ": ")
                     [:label.path path]
-                    [:p.highlight (:highlight result) "…"]
-                    [:hr]])]
+                    [:p.highlight (:highlight hit) "…"]])]
+                (pagination-links query total page-num per-page)
                 footer]))))
 
 (defn ^:private accounts-get [{user :user :as session}]
@@ -373,7 +394,11 @@
     (routes
       (GET "/" [] (index-get))
       (GET "/welcome" [] (welcome-get))
-      (GET "/search" [q] (handle-search q))
+
+      (GET "/search" {{q   "q", page "page", per-page "per-page"
+                       :or {q "", page "1", per-page "10"}} :params}
+        (search-get q (Integer/parseInt page) (Integer/parseInt per-page)))
+
       (GET "/accounts" {session :session} (accounts-get session))
       (GET "/accounts/connect" [] (accounts-connect-get))
       (GET "/accounts/connect/:service-slug/start" [service-slug] (accounts-connect-service-start-get service-slug))

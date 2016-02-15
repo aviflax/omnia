@@ -7,7 +7,6 @@ FIXME: description
 
 ### User-visible
 
-* Add pagination to search results
 * Ensure that only Business/Domain/Team service accounts can be added (maybe?)
 * If there are no accounts/services connected, the home page should say so
 * If a user disconnects their last account they should be logged out

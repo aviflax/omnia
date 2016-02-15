@@ -33,20 +33,32 @@
                  :query  query
                  :fields fields}})
 
-(defn search [q]
-  (as-> (esd/search (connect)
-                    "omnia"
-                    "document"
-                    :query (multi-match-query [:text :text.english] q)
-                    :highlight {:fields    {:text* {:fragment_size 150, :number_of_fragments 1}}
-                                :pre_tags  ["<b>"]
-                                :post_tags ["</b>"]}
-                    :_source {:exclude [:text]}) result
-        (get-in result [:hits :hits])
-        (map #(assoc (:_source %)
-               :highlight (or (get-in % [:highlight :text.english 0])
-                              (get-in % [:highlight :text 0])))
-             result)))
+(defn search
+  ([q] (search q 1 10))
+  ([q page-num per-page]
+   (let [size per-page
+         from (- (* page-num per-page)
+                 per-page)
+         result (esd/search (connect)
+                            "omnia"
+                            "document"
+                            :query (multi-match-query [:text :text.english] q)
+                            :highlight {:fields    {:text* {:fragment_size 150, :number_of_fragments 1}}
+                                        :pre_tags  ["<b>"]
+                                        :post_tags ["</b>"]}
+                            :_source {:exclude [:text]}
+                            :size size
+                            :from from)
+         hits (as-> (get-in result [:hits :hits]) hits
+                    (map #(assoc (:_source %)
+                           :highlight (or (get-in % [:highlight :text.english 0])
+                                          (get-in % [:highlight :text 0])))
+                         hits))
+         total (-> result :hits :total)]
+     {:hits     hits
+      :total    total
+      :page-num page-num
+      :per-page per-page})))
 
 (defn delete [doc]
   "If the doc isn’t found, this is just a no-op"
