@@ -65,17 +65,17 @@
         (join " " it)))
 
 (defn ^:private pagination-links [query total current-page per-page]
-  (let [num-pages (-> (/ total per-page) Math/ceil int)]
-    [:ol#pagination
-     (for [page-num (range 1 (inc num-pages))]
-       [:li
-        (if (= page-num current-page)
-            current-page
-            [:a {:href (str "/search?q=" query
-                            "&page=" page-num
-                            "&per-page=" per-page)}
-             page-num])
-        ])]))
+  (when (> total per-page)
+        (let [num-pages (-> (/ total per-page) Math/ceil int)]
+          [:ol#pagination
+           (for [page-num (range 1 (inc num-pages))]
+             [:li
+              (if (= page-num current-page)
+                  current-page
+                  [:a {:href (str "/search?q=" query
+                                  "&page=" page-num
+                                  "&per-page=" per-page)}
+                   page-num])])])))
 
 (defn ^:private search-get [query page-num per-page]
   (if (blank? (trim query))
