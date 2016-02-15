@@ -38,7 +38,7 @@
 (def ^:private footer
   [:footer
    {:style "margin-top: 10em;"}
-   [:a {:href "/accounts"} "Manage Accounts"]
+   [:a {:href "/accounts"} "Accounts"]
    (f/form-to [:post "/logout"]
               (f/submit-button "Log out"))])
 
