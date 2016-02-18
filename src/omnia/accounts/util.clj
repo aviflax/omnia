@@ -19,7 +19,6 @@
   (index/delete-all-docs-for-account account)
   (db/update-account account :sync-cursor nil))
 
-
 (defn sync-all [accounts]
   (println "Syncing accounts:" accounts)
   (doseq [account accounts]
@@ -32,12 +31,12 @@
 
 (def executor (atom nil))
 
-(defn start-syncing [user-email interval-secs]
+(defn start-syncing [interval-secs]
   (let [exec (ScheduledThreadPoolExecutor. 1)]
     (reset! executor exec)
     (.scheduleAtFixedRate
       exec
-      #(sync-all (db/get-accounts user-email))
+      #(sync-all (db/get-one-account-per-active-service))
       0
       interval-secs
       TimeUnit/SECONDS)))

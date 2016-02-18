@@ -11,11 +11,8 @@ FIXME: description
 * If there are no accounts/services connected, the home page should say so
 * If a user disconnects their last account they should be logged out
 * Google Drive: Find a way to detect when a file has been un-shared and un-index it
-* Sync documents at the service level rather than the account level
 * When a user disconnects an account, make sure not to un-index docs that other users should be
   able to find
-* When two users in the same team/domain connect accounts, the same documents shouldn’t be indexed
-  multiple times
 * Gracefully handle the case when a user opts to connect a new account, navigates to the service’s
   connect screen, then chooses “cancel” or “no”
 * If a user connects an account that had already been connected to a different account, don’t just

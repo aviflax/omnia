@@ -248,17 +248,15 @@
 
 (defn get-accounts [user-email]
   (let [db (d/db (connect))
-        results (d/q '[:find ?account
+        results (d/q '[:find [?account ...]
                        :in $ ?user-email
                        :where [?user :user/email ?user-email]
                        [?account :account/user ?user]]
                      db user-email)]
     (map
-      (fn [result]
-        (->> (first result)
-             (d/entity db)
-             account-entity->map
-             map->Account))
+      #(->> (d/entity db %)
+            account-entity->map
+            map->Account)
       results)))
 
 (defn update-account [account key value]
@@ -312,3 +310,20 @@
                                  :user/name  name}])
         db-after (:db-after tx-result)]
     (pull-entity db-after :user/id id)))
+
+(defn get-one-account-per-active-service []
+  "For syncing. We need to sync accounts because we need active tokens to do so, and those are
+   at the account level. But we only want to sync one account per service; so we don’t do redundant
+   work."
+  (let [db (d/db (connect))
+        service-results (d/q '[:find [?service ...]
+                               :where [?service :service/client-id]] db)
+        account-results (mapcat #(d/q '[:find [?account]
+                                        :in $ ?service
+                                        :where [?account :account/service ?service]]
+                                      db %)
+                                service-results)]
+    (map #(->> (d/entity db %)
+               account-entity->map
+               map->Account)
+         account-results)))
