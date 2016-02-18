@@ -179,7 +179,12 @@
                                  your entire team/organization."]])
 
                      "google-drive"
-                     [:li "TODO: add explanatory text here!"]
+                     (seq [[:li "If you choose to continue, we’ll direct you to " service-name ", who will ask you whether
+                                 you’d like to give us permission to <b>read</b> your documents."]
+
+                           [:li "We’ll only read the documents in your Google Drive that are shared with your entire
+                                 organization — that is, those documents that everyone in the organization can
+                                 <em>already</em> find and view within Google Drive."]])
 
                      "Something went wrong here!")]
               [:p]
@@ -249,7 +254,7 @@
             (header "Accounts » New Account Connected")
             [:section
              [:h1 "Your new " (:display-name service) " account has been connected!"]
-             [:p "We’ve started indexing your new account. We’ll send you an email when we’re done!"]
+             [:p "We’ve started indexing the documents in this account. We’ll send you an email when we’re done!"]
              [:p [:a {:href "/accounts"} "Back to Accounts"]]]])))
 
 (defn ^:private account-delete [id]
