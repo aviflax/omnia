@@ -18,6 +18,10 @@ FIXME: description
 * If a user connects an account that had already been connected to a different account, don’t just
   overwrite the user association of that account. Figure out something better... maybe merge the
   user accounts, TBD.
+* If I log in via Google Drive and then connect Dropbox, I should be able to log in via Dropbox and
+  see both accounts. (Currently I see no accounts. Maybe because of joining on email address.)
+* Add a live display of progress/status to the “indexing” page after connecting a new account
+  (whether via login or via connect).
 
 ### Non-user-visible
 
