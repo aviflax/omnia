@@ -158,7 +158,7 @@
          :name  (:displayName it)
          :email (get-in it [:emails 0 :value])}))
 
-(defrecord Service [display-name client-id client-secret]
+(defrecord Service [slug display-name client-id client-secret]
   services/Service
   (get-auth-uris [_] auth)
   (get-user-account [_ access-token] (get-user access-token)))

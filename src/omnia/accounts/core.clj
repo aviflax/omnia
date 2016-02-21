@@ -3,7 +3,7 @@
 
 (defprotocol Account
   (init [account] "Initialize an Account quickly and synchronously.")
-  (sync [account] "Retrieve list of changes from the service and update the index.")
+  (sync [account] "Retrieve list of changes from the service and update the index. This blocks and can take a long time.")
   ;(connect [account])
   ;(get-doc-changes [account])
   ;(disconnect [account])

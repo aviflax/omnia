@@ -54,9 +54,7 @@
                    :omnia-id         (.pathLower entry)})
 
     DbxFiles$FileMetadata
-    (if (should-index? entry)
-        (do
-          (println "indexing" (.pathLower entry))
+    (when (should-index? entry)
           (as-> (file->doc account entry) doc
                 (assoc doc :text
                            (when (can-parse? (mime-type-of (.name entry)))
@@ -66,7 +64,6 @@
                                      (str (.name entry))    ;; HACK: concatenate the file name to the end of the text so it’ll be included in the search
                                      )))
                 (index/add-or-update doc)))
-        (println "skipping" (.pathLower entry)))
 
     ; default case — probably a folder.
     (println "skipping" (.pathLower entry))))
@@ -99,7 +96,7 @@
          :name  (-> it .name .displayName)
          :email (.email it)}))
 
-(defrecord Service [display-name client-id client-secret]
+(defrecord Service [slug display-name client-id client-secret]
   services/Service
   (get-auth-uris [_] auth)
   (get-user-account [_ access-token] (get-user access-token)))

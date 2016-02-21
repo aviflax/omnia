@@ -5,7 +5,10 @@
             :url "TBD"}
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [clojurewerkz/elastisch "2.2.1"]
+
+                 ; Services
                  [com.dropbox.core/dropbox-core-sdk "2.0-beta-5" :exclusions [com.fasterxml.jackson.core/jackson-core]]
+                 [com.box/box-java-sdk "2.0.0"]
 
                  ; HTTP client stuff
                  [clj-http "2.0.1"]

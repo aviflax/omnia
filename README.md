@@ -11,6 +11,8 @@ FIXME: description
 * If there are no accounts/services connected, the home page should say so
 * If a user disconnects their last account they should be logged out
 * Google Drive: Find a way to detect when a file has been un-shared and un-index it
+* When a user disconnects an account, make sure to un-index any docs
+  that should henceforth be unfindable
 * When a user disconnects an account, make sure not to un-index docs that other users should be
   able to find
 * Gracefully handle the case when a user opts to connect a new account, navigates to the service’s

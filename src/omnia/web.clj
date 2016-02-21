@@ -135,8 +135,10 @@
           (header "<a href=\"/accounts\">Accounts</a> » Connect a New Account")
           [:section
            [:h1 "Which type of Account would you like to connect?"]
-           [:p [:a {:href "/accounts/connect/dropbox/start"} "Dropbox"]]
-           [:p [:a {:href "/accounts/connect/google-drive/start"} "Google Drive"]]
+           [:ol
+            [:li [:a {:href "/accounts/connect/box/start"} "Box"]]
+            [:li [:a {:href "/accounts/connect/dropbox/start"} "Dropbox"]]
+            [:li [:a {:href "/accounts/connect/google-drive/start"} "Google Drive"]]]
            [:p "Please choose a service and we’ll explain more about how this works."]
            [:p "Do you need to connect a service not shown here? Let us know! {LINK}"]]]))
 
@@ -168,6 +170,9 @@
               [:h1 "So you want to connect your " service-name " account…"]
               [:h2 "Here’s the deal:"]
               [:ul (case (:slug service)
+                     "box"
+                     [:li "help text coming soon!"]
+
                      "dropbox"
                      (seq [[:li "If you choose to continue, we’ll direct you to " service-name ", who will ask you whether
                                  you’d like to give us permission to access your documents."]
