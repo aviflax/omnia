@@ -75,9 +75,10 @@
         ids (->> (esd/search conn
                              "omnia"
                              "document"
-                             :query (q/term :omnia-account-id (:id account)))
-                 :hits
-                 :hits
+                             :query (q/term :omnia-account-id (:id account))
+                             :scroll "1m"
+                             :_source false)
+                 (esd/scroll-seq conn)
                  (map :_id))]
     (run! #(esd/delete conn "omnia" "document" %)
           ids))
