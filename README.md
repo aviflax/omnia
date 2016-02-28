@@ -24,6 +24,7 @@ FIXME: description
   see both accounts. (Currently I see no accounts. Maybe because of joining on email address.)
 * Add a live display of progress/status to the “indexing” page after connecting a new account
   (whether via login or via connect).
+* Basic duplicate detection and coalescing
 
 ### Non-user-visible
 
