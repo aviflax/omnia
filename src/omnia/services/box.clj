@@ -1,5 +1,6 @@
 (ns omnia.services.box
-  (:require [omnia
+  (:require [clojure.core.async :refer [chan dropping-buffer go <! >!!]]
+            [omnia
              [db :as db]
              [index :as index]
              [extraction :refer [can-parse?]]]
@@ -78,18 +79,26 @@
     (index-folder conn "0" account)))
 
 (defn ^:private synchronize! [account]
+  ;; TODO: some way to resume an interrupted initial index task
   (if (:sync-cursor account)
       (incremental-sync account)
       (initial-index account)))
 
-(defrecord Account
-  [id user service access-token sync-cursor]
+(def ^:private sync-chan (chan (dropping-buffer 1)))
 
+(defn ^:private start []
+  (go
+    (loop []
+      (when-some [account (<! sync-chan)]
+        (synchronize! account)
+        (recur)))))
+
+(defrecord Account [id user service access-token sync-cursor]
   accounts/Account
-
-  (init [account]
-    ; nothing to do right now.
-    account)
-
+  (init [account] account)                                  ; nothing to do right now.
   (sync [account]
-    (synchronize! account)))
+    ;; TODO: test that this whole core.async setup does indeed linearize syncs as desired.
+    (>!! sync-chan account)))
+
+;; TEMP until I have a centralized “system” start routine
+(start)

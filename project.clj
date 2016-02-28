@@ -4,6 +4,7 @@
   :license {:name "TBD"
             :url "TBD"}
   :dependencies [[org.clojure/clojure "1.8.0"]
+                 [org.clojure/core.async "0.2.374"]
                  [clojurewerkz/elastisch "2.2.1"]
 
                  ; Services
