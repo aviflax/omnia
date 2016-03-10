@@ -24,6 +24,9 @@
                                                            :store "yes"
                                                            :index "not_analyzed"}}}}))
 
+(defn ^:private delete-index []
+  (esi/delete (connect) "omnia"))
+
 (defn ^:private multi-match-query
   "Multi-Match Query. This isn’t included in Elastisch for some reason.
 
