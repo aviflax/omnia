@@ -33,19 +33,22 @@
                                    :as          :json})]
     (get-in response [:body :access_token])))
 
+(defn ^:private update-access-token [account]
+  (let [token (get-new-access-token account)]
+    (println "got new access token" token "; updating account in DB")
+    (db/update-account (:id account) :access-token token)
+    (assoc account :access-token token)))
+
 (defn ^:private goget
   [url {:keys [access-token] :as account} & [opts]]
-  ;; TODO: switch to try/catch and rethrow anything other than 401
-  ;; TODO: figure out a way to update the account that is being used in outer contexts
-  (let [response (client/get url (assoc opts :throw-exceptions false
-                                             :oauth-token access-token))]
-    (if (= (:status response) 401)
-        (let [token (get-new-access-token account)]
-          (println "got new access token" token " so updating account in DB")
-          (db/update-account (:id account) :access-token token)
-          (println "trying again with new access token" token)
-          (goget url (assoc account :access-token token) opts))
-        response)))
+  ;; TODO: figure out a way to update the token that is being used in outer contexts
+  (try
+    (client/get url (assoc opts :oauth-token access-token))
+    (catch Exception err
+      (if (= (:status err) 401)
+          (as-> (update-access-token account) account
+                (client/get url (assoc opts :oauth-token (:access-token account))))
+          (throw err)))))
 
 (defn ^:private file->doc
   "Convert a Google Drive file to an Omnia document."

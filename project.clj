@@ -6,6 +6,7 @@
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/core.async "0.2.374"]
                  [clojurewerkz/elastisch "2.2.1"]
+                 [com.taoensso/timbre "4.3.0"]
 
                  ; Services
                  [com.dropbox.core/dropbox-core-sdk "2.0-beta-5" :exclusions [com.fasterxml.jackson.core/jackson-core]]
