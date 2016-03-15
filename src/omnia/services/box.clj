@@ -3,6 +3,7 @@
    because the Java SDK doesn’t support regular polling for events — only long-polling, which
    doesn’t fit our current needs."
   (:require [clojure.core.async :refer [chan dropping-buffer go <! >!!]]
+            [clojure.core.cache :as cache]
             [omnia
              [db :as db]
              [index :as index]
@@ -16,8 +17,11 @@
              :refer (log trace debug info warn error fatal report
                          logf tracef debugf infof warnf errorf fatalf reportf
                          spy get-env log-env)])
-  (:import [com.box.sdk BoxAPIConnection BoxUser BoxFolder BoxFile$Info BoxFolder$Info]
-           [java.io ByteArrayOutputStream]))
+  (:import [com.box.sdk BoxAPIConnection BoxUser BoxFolder BoxFile$Info BoxFolder$Info BoxFile BoxAPIException]
+           [java.io ByteArrayOutputStream]
+           [clojure.lang ExceptionInfo]))
+
+(def ^:private recently-processed-events (cache/fifo-cache-factory {}))
 
 (def ^:private auth "TODO: maybe this should just be in the database"
   {:type   :oauth2
@@ -44,11 +48,14 @@
 
 (defn ^:private get-path [file-info] "COMING SOON!")
 
+(defn ^:private omnia-id-for-file [file-info]
+  (str "box/" (.getID file-info)))
+
 (defn ^:private file->doc [file-info account]
   {:id                 (.getID file-info)
    :name               (.getName file-info)
    :path               (get-path file-info)
-   :omnia-id           (str "box/" (.getID file-info))
+   :omnia-id           (omnia-id-for-file file-info)
    :omnia-account-id   (:id account)
    :omnia-service-name (-> account :service :display-name)})
 
@@ -78,36 +85,58 @@
     (get-in response [:body :access_token])))
 
 (defn ^:private update-access-token [account]
+  "Retrieves a new access token for the account, updates the account’s access token in the database,
+   returns the account with the new access token."
   (let [token (get-new-access-token account)]
     (println "got new access token" token "; updating account in DB")
     (db/update-account account :access-token token)
     (assoc account :access-token token)))
 
 (defn ^:private goget
+  "Retrieves a resource from the Box API, using the OAuth2 access token in the account. If the
+   response indicates that the access token has expired, will automatically retrieve a new access
+   token, associate it with the account, save the change to the database, and retry the request.
+   Returns a map with two keys: :account and :response. Callers should replace their value for the
+   account with the returned value because it might contain a new access token. They don’t, however,
+   need to worry about persisting the account to the database; this function handles that if
+   necessary. If any error occurs, throws an Exception."
   [url {:keys [access-token] :as account} & [opts]]
   ;; TODO: figure out a way to update the token that is being used in outer contexts
   (try
-    (client/get url (assoc opts :oauth-token access-token))
-    (catch Exception err
-      (if (= (:status err) 401)
+    {:response (client/get url (assoc opts :oauth-token access-token))
+     :account  account}
+    (catch ExceptionInfo err
+      (if (= (-> err .data :status) 401)
           (as-> (update-access-token account) account
-                (client/get url (assoc opts :oauth-token (:access-token account))))
+                (goget url account opts))                   ; TODO add something to opts something to ensure that this retry occurs only once
           (throw err)))))
 
-(defn ^:private get-events-resource [account stream-position]
+(defn ^:private get-events-resource
+  "Returns a map containing the response and the potentially updated account."
+  [account stream-position]
   (info "Retrieving events for Box account" account "with stream position" stream-position)
-  (-> (goget (:events urls) account {:query-params {"stream_position" stream-position
-                                                    "limit"           10000}
-                                     :as           :json})
-      :body))
+  (goget (:events urls) account {:query-params {"stream_position" stream-position
+                                                "limit"           10000}
+                                 :as           :json}))
 
 (defn ^:private get-latest-event-stream-position [account]
-  (-> (get-events-resource account "now")
-      :next_stream_position))
+  (-> (get-events-resource account "now") :response :body :next_stream_position str))
 
-(def ^:private event-types-to-process #{"ITEM_CREATE" "ITEM_UPLOAD" "ITEM_TRASH"})
+(def ^:private event-types-to-process #{"ITEM_CREATE" "ITEM_UPLOAD"
+                                        "ITEM_TRASH" "ITEM_UNDELETE_VIA_TRASH"})
 
-(defn un-index-file [a b] nil) ;TODO
+(defn un-index-file [file-info account]
+  (info "Box: un-indexing file" file-info)
+  (index/delete {:omnia-account-id (:id account)
+                 :omnia-id         (omnia-id-for-file file-info)}))
+
+(defn ^:private recently-processed? [event]
+  (let [id (:event_id event)]
+    (if (cache/has? recently-processed-events id)
+        (do (cache/hit recently-processed-events id)
+            true)
+        (do (cache/miss recently-processed-events id event)
+            false))))
 
 (defn ^:private process-events [events account]
   ;; TODO: deal with this from the docs:
@@ -117,21 +146,35 @@
 
   (as-> (filter #(event-types-to-process (:event_type %)) events) events
         (filter #(= (-> % :source :type) "file") events)
-        (doseq [event events]
-          (let [file-info "TODO"]
-            (if (not= (:event_type event) "ITEM_TRASH")
-                (index-file file-info account)
-                (un-index-file file-info account))))))
+        (remove recently-processed? events)
+        (let [conn (BoxAPIConnection. (:access-token account))]
+          (doseq [event events]
+            (try
+              (let [file (BoxFile. conn (-> event :source :id))
+                    _ (info "Attempting to retrieve info for Box file: " (:source event))
+                    file-info (.getInfo file)]
+                (if (= (:event_type event) "ITEM_TRASH")
+                    (un-index-file file-info account)
+                    (index-file file-info account)))
+              (catch BoxAPIException e
+                ; 404 or 410 means the file was subsequently deleted, so we can just skip it
+                (when-not (#{404 410} (.getResponseCode e))
+                  (throw e))))))))
 
 (defn ^:private incremental-sync [account]
   (loop [; What our domain model calls a sync-cursor, Box’s API calls the stream position.
-         stream-position (:sync-cursor account)]
-    (let [{events               :entries
-           next-stream-position :next_stream_position} (get-events-resource account stream-position)]
+         stream-position (:sync-cursor account)
+         account account]
+    (let [{:keys [account response]} (get-events-resource account stream-position)
+          {events               :entries
+           next-stream-position :next_stream_position} (:body response)]
+      (debug "next-stream-position" next-stream-position "events" events)
       (process-events events account)
-      (db/update-account account :sync-cursor next-stream-position)
+      (when next-stream-position
+            (do (info "Setting Box sync-cursor to " next-stream-position)
+                (db/update-account account :sync-cursor (str next-stream-position))))
       (when (seq events)
-            (recur next-stream-position)))))
+            (recur next-stream-position account)))))
 
 (defn ^:private index-folder [conn folder-id account]
   (doseq [item-info (BoxFolder. conn folder-id)]

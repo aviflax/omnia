@@ -14,7 +14,8 @@
             [clojure.string :refer [blank? lower-case]]
             [ring.util.codec :refer [url-encode]]
             [pantomime.extract :refer [parse]]
-            [clj-http.client :as client]))
+            [clj-http.client :as client])
+  (:import [clojure.lang ExceptionInfo]))
 
 (def ^:private auth "TODO: maybe this should just be in the database"
   {:type   :oauth2
@@ -44,10 +45,10 @@
   ;; TODO: figure out a way to update the token that is being used in outer contexts
   (try
     (client/get url (assoc opts :oauth-token access-token))
-    (catch Exception err
-      (if (= (:status err) 401)
+    (catch ExceptionInfo err
+      (if (= (-> err .data :status) 401)
           (as-> (update-access-token account) account
-                (client/get url (assoc opts :oauth-token (:access-token account))))
+                (goget url account opts))
           (throw err)))))
 
 (defn ^:private file->doc

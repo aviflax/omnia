@@ -25,6 +25,7 @@ FIXME: description
 * Add a live display of progress/status to the “indexing” page after connecting a new account
   (whether via login or via connect).
 * Basic duplicate detection and coalescing
+* Handle refresh tokens expiring
 
 ### Non-user-visible
 

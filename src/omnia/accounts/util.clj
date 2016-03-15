@@ -42,4 +42,4 @@
       TimeUnit/SECONDS)))
 
 (defn stop-syncing []
-  (.shutdown @executor))
+  (.shutdownNow @executor))
