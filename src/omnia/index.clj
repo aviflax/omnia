@@ -4,6 +4,7 @@
             [clojurewerkz.elastisch.rest :as esr]
             [clojurewerkz.elastisch.rest.index :as esi]
             [clojurewerkz.elastisch.rest.document :as esd]
+            [clojurewerkz.elastisch.rest.response :as esrsp]
             [clojurewerkz.elastisch.query :as q]))
 
 (defn ^:private connect [] (esr/connect "http://127.0.0.1:9200"))
@@ -24,8 +25,12 @@
                                                            :store "yes"
                                                            :index "not_analyzed"}}}}))
 
-(defn ^:private delete-index []
-  (esi/delete (connect) "omnia"))
+(defn ^:private delete-index [confirmation]
+  (if (= confirmation "yes, really")
+      (let [response (esi/delete (connect) "omnia")]
+        (when-not (esrsp/ok? response)
+          (throw (.Exception (:status response)))))
+      (throw (.Exception "confirmation not acceptable"))))
 
 (defn ^:private multi-match-query
   "Multi-Match Query. This isn’t included in Elastisch for some reason.
