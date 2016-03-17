@@ -118,7 +118,7 @@
           [:style "form { display: inline; margin-left: 1em;}"]]
          [:body
           (header "Accounts")
-          (if-let [accounts (seq (db/get-accounts (:email user)))]
+          (if-let [accounts (seq (db/get-accounts-for-user (:id user)))]
             [:ul
              (for [account accounts]
                [:li (-> account :service :display-name)
@@ -263,8 +263,8 @@
   ;; TODO: make this async. Sure, I could just wrap it with `future`, but then the user
   ;; would navigate back to /accounts and would still see the account they asked to disconnect.
   ;; I’ll need some way to mark an account as “disconnect in progress”
-  (-> (db/get-account id)
-      accounts.util/disconnect)
+  (accounts.util/disconnect id)
+  ;; TODO: maybe refresh ES DB index?
   (redirect "/accounts" 303))
 
 (defn ^:private login-get []
@@ -430,5 +430,12 @@
       wrap-params
       wrap-stacktrace))
 
+(def ^:private server (atom nil))
+
 (defn start []
-  (run-jetty app {:port 3000 :join? false}))
+  (reset! server
+          (run-jetty app {:port 3000 :join? false})))
+
+(defn stop []
+  (.stop @server)
+  (reset! server nil))

@@ -118,7 +118,7 @@
               (.entries list-result))
 
         ; update account cursor in DB
-        (db/update-account account :sync-cursor (.cursor list-result))
+        (db/update-account (:id account) :sync-cursor (.cursor list-result))
 
         (Thread/sleep 5)
 

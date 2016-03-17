@@ -7,17 +7,17 @@
 (defn disconnect
   "Remove the account from the database, all associated documents from the index,
    and let the service know about the disconnect (if it supports it)."
-  [account]
+  [account-id]
   ; TODO: check the return value and validate it
-  (db/delete-account account)
-  (index/delete-all-docs-for-account account)
+  (db/delete-account account-id)
+  (index/delete-all-docs-for-account account-id)
   ;; TODO: revoke access for Google Drive as per https://developers.google.com/identity/protocols/OAuth2WebServer#tokenrevoke
   ;; Dropbox doesn’t appear to support this.
   nil)
 
 (defn reset [account]
   (index/delete-all-docs-for-account account)
-  (db/update-account account :sync-cursor nil))
+  (db/update-account (:id account) :sync-cursor nil))
 
 (defn sync-all [accounts]
   (println "Syncing accounts:" accounts)

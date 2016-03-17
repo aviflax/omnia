@@ -1,329 +1,253 @@
 (ns omnia.db
-  (require [datomic.api :as d]
-           [omnia.core :refer [map->User]]
+  "
+  Here are the required keys for each type:
+
+  User: id, email, name
+  Service: slug, display-name, client-id, client-secret.
+  Account: id, user-id, service-slug, access-token, refresh-token, sync-cursor
+
+  Service has these optional keys:
+    for Dropbox: team-id, team-folder-id, team-folder-name, team-folder-path
+    for Box: (coming soon)
+
+  Accounts are conceptually a “bridge” that connects a User and a Service. In the DB, account
+  docs store only the IDs of their Users and Services, for normalization. The API of this component,
+  however, accepts and returns instances of omnia.accounts.core/Account (which are also expected
+  to be associatives (maps)) which have :user and :service keys rather than just the IDs. In other
+  words, this component is acting as a sort-of Data Access Object or maybe even a Object-Object
+  Mapper (OOM). Is that good? Is it optimal? I’m not sure -- we’ll see!
+  "
+  (require [clojure.string :refer [blank? includes? lower-case]]
            [omnia.accounts.core :refer [map->Account]]
-           [omnia.services.core :refer [map->Service]]))
+           [omnia.services.core :refer [map->Service]]
+           [clojurewerkz.elastisch.rest :as esr]
+           [clojurewerkz.elastisch.rest.document :as esd]
+           [clojurewerkz.elastisch.rest.index :as esi]
+           [clojurewerkz.elastisch.rest.response :refer [found? hits-from ok? total-hits]]
+           [clojurewerkz.elastisch.query :as q])
+  (:import [java.util UUID]))
 
-(def ^:private uri "datomic:free://localhost:4334/omnia")   ;; TODO: move to config
+(def ^:private es
+  "TODO: move to config
+   We’re using discrete indices for “database” type data and “documents” because they have
+   significantly different indexing (mapping) requirements."
+  {:uri "http://127.0.0.1:9200"})
 
-(defn ^:private connect [] (d/connect uri))
+;This is really index-name so maybe rename it accordingly.
+;This is a var so it can have a different value for testing.
+(def ^:private index)
 
-(def user-schema
-  [{:db/id                 (d/tempid :db.part/db)
-    :db/ident              :user/id
-    :db/valueType          :db.type/uuid
-    :db/cardinality        :db.cardinality/one
-    :db/unique             :db.unique/identity
-    :db/doc                "The unique identifier for a user."
-    :db.install/_attribute :db.part/db}
+(defn ^:private connect []
+  (esr/connect (:uri es)
+               {:connection-manager
+                (clj-http.conn-mgr/make-reusable-conn-manager {:timeout 10})}))
 
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :user/email
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/unique             :db.unique/identity
-    :db/doc                "The email address of a User."
-    :db.install/_attribute :db.part/db}
+(def ^:private conn (atom nil))
 
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :user/name
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "The name of the user, i.e. Ada Lovelace."
-    :db.install/_attribute :db.part/db}
-   ])
+(def schemata
+  "Required keys must be present, non-empty, non-blank, non-nil, and non-zero."
+  ;; TODO: maybe use Prismatic Schema for this?
+  {:service {:required [:slug :display-name :client-id :client-secret]}
+   :user    {:required [:name :email]}})
 
-(def service-schema
-  [{:db/id                 (d/tempid :db.part/db)
-    :db/ident              :service/slug
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/unique             :db.unique/identity
-    :db/doc                "Slug for a Service, e.g. dropbox or google-drive"
-    :db.install/_attribute :db.part/db}
+(defn ^:private get-conn []
+  (or @conn (throw (ex-info "Component is stopped" {}))))
 
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :service/display-name
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/unique             :db.unique/identity
-    :db/doc                "Display name of the Service, e.g. "
-    :db.install/_attribute :db.part/db}
+(defn start [index-name]
+  (def index index-name)
+  (reset! conn (connect)))
 
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :service/client-id
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "OAuth 2.0 Client ID for this Service for this installation of Omnia"
-    :db.install/_attribute :db.part/db}
+(defn stop []
+  ;; TODO: shutdown the connection manager
+  (reset! conn nil)
+  nil)
 
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :service/client-secret
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "OAuth 2.0 Client Secret for this Service for this installation of Omnia"
-    :db.install/_attribute :db.part/db}
-   ])
+(def ^:const mappings
+  {"service" {:properties {:slug {:type  "string"
+                                  :index "not_analyzed"}}}
+   "user"    {:properties {:email {:type  "string"
+                                   :index "not_analyzed"}
+                           :id    {:type  "string"
+                                   :index "not_analyzed"}}}
+   "account" {:properties {:id           {:type  "string"
+                                          :index "not_analyzed"}
+                           :user-id      {:type  "string"
+                                          :index "not_analyzed"}
+                           :service-slug {:type  "string"
+                                          :index "not_analyzed"}}}})
 
-(def account-schema
-  "An Account is a linked Account for a specific User for a given Service."
-  [{:db/id                 (d/tempid :db.part/db)
-    :db/ident              :account/id
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/unique             :db.unique/identity
-    :db/doc                "The ID of an Account. A composite value: {service-slug}/{id of account in service}."
-    :db.install/_attribute :db.part/db}
+(defn ^:private create-index
+  "This is really here just for convenience."
+  []
+  (esi/create (get-conn) index :mappings mappings))
 
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :account/user
-    :db/valueType          :db.type/ref
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "The User that “owns” this account."
-    :db.install/_attribute :db.part/db}
-
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :account/service
-    :db/valueType          :db.type/ref
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "The service this is an account to/for/of e.g. Dropbox"
-    :db.install/_attribute :db.part/db}
-
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :account/access-token
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "OAuth 2.0 Access Token for this Account for this User."
-    :db.install/_attribute :db.part/db}
-
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :account/refresh-token
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "OAuth 2.0 Refresh Token for this Account for this User."
-    :db.install/_attribute :db.part/db}
-
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :account/sync-cursor
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "Sync cursor value for those systems that use them."
-    :db.install/_attribute :db.part/db}
-   ])
-
-(def dropbox-attributes
-  "These attributes are used by both Accounts and Services. An individual Account will have a Dropbox team folder, but
-   the service will as well. This association lives at the Service level so we don’t sync the same folder multiple
-   times redundantly when multiple users on the same team connect their Dropbox accounts.
-
-   So wait, I have to wonder —
-   do I really need this to live at the Account level at all? For what purpose? I supposed hypothetically there could
-   be multiple team folders or something like that, or multiple folders I want to sync, some of which show up in one
-   person’s account but not another’s — but YAGNI, you know? For now I’m only gonna support indexing a single folder
-   for Dropbox for a given instance of Omnia, and that folder will be the team folder found when the first user
-   connects their Dropbox account. BTW another implication of this is that when the last person disconnects the last
-   Dropbox account in the system, we need to then dissasociate the team folder from the Service, at that point — right?
-
-   OK so as of 3 January, here’s where I stand on this: while it’s true that I ultimately only want to maintain the
-   association with and state of the team folder at the service level (although perhaps I could even make the team
-   folder an “entity” and associate services and/or accounts with it) that’s really a performance optimization. I mean,
-   maintaining the data at the account level and syncing the same folder multiple times for a given installation won’t
-   lead to incorrect data — just redundant work. I.E. it’s inefficient. But I can live with runtime inefficiency
-   *for now* — right now my focus needs to be on UX and functionality, not efficiency. And sticking with all syncing
-   being at the account level — for now — lets me keep things simple and consistent across services, for now.
-
-   ----
-
-   On the 4th or the 5th I somehow lost the above paragraph in a stash, and so attempted to rewrite it like so:
-
-   > OK a few days later and I’ve decided to hold off on associating these attributes with the Dropbox Service, at this
-   > point, for now. Having them associated with the Accounts is sub-optimal, I think, but at the moment it’s more or less
-   > working and while it’s not very efficient — this will lead to indexing the same files repeatedly and redundantly —
-   > fixing this is more or less a performance optimization, and that’s not where I need to be focusing my efforts right
-   > now. I need to focus on functionality and UX right now. And I need velocity. Keeping syncing at the Account level for
-   > now means less work for me and also more consistency within the system as that’s how Google Drive works as well.
-
-   I’m retaining both paragraphs for now because one of them might express an idea that the other does not express, or
-   does not express well, and I just don’t have the energy to merge them right now."
-
-  [{:db/id                 (d/tempid :db.part/db)
-    :db/ident              :dropbox/team-id
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "Dropbox Team ID. Used to ensure that only the members of this team can log in to this instance of Omnia."
-    :db.install/_attribute :db.part/db}
-
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :dropbox/team-folder-id
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "Dropbox Team Folder ID."
-    :db.install/_attribute :db.part/db}
-
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :dropbox/team-folder-name
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "Dropbox Team Folder name."
-    :db.install/_attribute :db.part/db}
-
-   {:db/id                 (d/tempid :db.part/db)
-    :db/ident              :dropbox/team-folder-path
-    :db/valueType          :db.type/string
-    :db/cardinality        :db.cardinality/one
-    :db/doc                "Dropbox Team Folder path."
-    :db.install/_attribute :db.part/db}])
-
-; just for reference really (at least for now)
-;(defn create-db []
-;  (d/create-database uri)
-;  (d/transact (connect)
-;              (concat user-schema service-schema account-schema)))
-
-; TBD:
-; Does it make sense to isolate Datomic from the rest of the system?
-;   Am I adding complexity (transformation) and dulling the advantages of Datomic by doing so?
-
-(defn ^:private remove-namespace-from-map-keys [m]
-  (as-> (dissoc m :db/id) m                                 ; we don’t care about :db/id in userland; it’s internal to Datomic. And we don’t want it to overwrite any other attributes with the same name (less namespace)
-        (zipmap (map (comp keyword name)
-                     (keys m))
-                (vals m))))
-
-(defn ^:private entity->map
-  "We need this mainly because Datomic entities don’t support dissoc"
-  [e]
-  (as-> (d/touch e) it
-        (apply hash-map (interleave (keys it) (vals it)))
-        (remove-namespace-from-map-keys it)))
-
-(defn ^:private entity-id->map [db entity-id] (-> (d/entity db entity-id)
-                                                  entity->map))
-
-(defn ^:private pull-entity [db k v]
-  (let [e (d/pull db '[*] [k v])]
-    (when-not (nil? (:db/id e))
-      (remove-namespace-from-map-keys e))))
-
-(defn ^:private account-entity->map [e]
-  (-> (entity->map e)
-      (assoc
-        :user (entity-id->map (d/entity-db e) (get-in e [:account/user :db/id]))
-        :service (entity-id->map (d/entity-db e) (get-in e [:account/service :db/id])))))
+(defn ^:private new-id []
+  (str (UUID/randomUUID)))
 
 (defn account-id [service-slug service-account-id]
   "Accepts a service-slug and a the ID of a user account in its source service and returns an Omnia
-  account ID for use with DB lookups."
+  account ID for use with the DB."
   (str service-slug "/" service-account-id))
 
-(defn create-account [{:keys [id user service access-token refresh-token
-                              team-folder-id team-folder-name team-folder-path]}]
-  (let [tempid (d/tempid :db.part/user)
-        proto-account (merge {:db/id                tempid
-                              :account/id           id
-                              :account/user         [:user/id (:id user)]
-                              :account/service      [:service/slug (:slug service)]
-                              :account/access-token access-token}
-                             (when refresh-token
-                                   {:account/refresh-token refresh-token})
-                             (when (and (= (:slug service) "dropbox")
-                                        team-folder-id)
-                                   {:dropbox/team-folder-id   team-folder-id
-                                    :dropbox/team-folder-name team-folder-name
-                                    :dropbox/team-folder-path team-folder-path}))
-        tx-result @(d/transact (connect) [proto-account])
-        db-after (:db-after tx-result)
-        entity-id (d/resolve-tempid db-after (:tempids tx-result) tempid)
-        entity (d/entity db-after entity-id)]
-    (as-> (entity->map entity) it
-          (assoc it :user (-> it :user entity->map map->User)
-                    :service (-> it :service entity->map map->Service))
-          (map->Account it))))
+(defn ^:private create-entity [mapping-type entity id]
+  ;; TODO: prevent creation of duplicate entities
+  (let [response (esd/put (get-conn) index mapping-type id entity)]
+    (when-not (ok? response)
+      (throw (ex-info (-> response :status str) response)))))
 
-(defn get-account [id]
-  (when-let [e (d/entity (d/db (connect)) [:account/id id])]
-    (-> e
-        account-entity->map
+(defn create-service
+  "Creates the supplied service in the database, using its :slug as its id. Returns nil."
+  [service]
+  {:pre [(every? #(-> service % blank? not) [:slug :display-name :client-id :client-secret])
+         (re-find #"^[a-z-]+$" (:slug service))]}
+  (create-entity "service" service (:slug service)))
+
+(defn create-account
+  "Creates the supplied account in the database. It must have a value for :id.
+   Returns the account as an Account."
+  [account]
+  {:pre [(contains? account :id)
+         (not (blank? (:id account)))
+         (not (blank? (get-in account [:user :id])))
+         (not (blank? (get-in account [:service :slug])))
+         (-> account :user map?)
+         (-> account :service map?)
+         (re-find #"^[a-zA-Z0-9-://]+$" (:id account))]}
+  ;; TODO: prevent creation of duplicate accounts
+  (let [doc (-> account
+                (assoc :user-id (get-in account [:user :id])
+                       :service-slug (get-in account [:service :slug]))
+                (dissoc :user :service))]
+    ; TODO: check result and throw if it failed
+    (create-entity "account" doc (:id doc))
+    (map->Account account)))
+
+(defn ^:private get-source [mapping-type id]
+  (-> (esd/get (get-conn) index mapping-type id
+               ; this doesn’t seem to work - when an HTTP error occurs esd/get still just returns nil
+               {:throw-exceptions true})
+      :_source))
+
+(defn ^:private account-map->Account
+  "Accepts an account as a map containing :user-id and :service-slug, retrieves the referenced user
+   and service, replaces the ID/slug keys with full values in :user and :service, and converts it
+   into an Account."
+  [account]
+  (let [user (get-source "user" (:user-id account))
+        service (get-source "service" (:service-slug account))]
+    (when-not user
+      (throw (ex-info (str "Could not find user with id " (:user-id account) " for account " (:id account)) account)))
+    (when-not service
+      (throw (ex-info (str "Could not find service with slug " (:service-slug account) " for account " (:id account)) account)))
+    (-> (assoc account
+          :user user
+          :service service)
+        (dissoc :user-id :service-slug)
         map->Account)))
 
-(defn get-accounts [user-email]
-  (let [db (d/db (connect))
-        results (d/q '[:find [?account ...]
-                       :in $ ?user-email
-                       :where [?user :user/email ?user-email]
-                       [?account :account/user ?user]]
-                     db user-email)]
-    (map
-      #(->> (d/entity db %)
-            account-entity->map
-            map->Account)
-      results)))
+(defn get-account
+  "Retrieves an account by id. Returns nil if the account does not exist; throws an exception if
+   something exceptional occurs (I think; TODO: confirm)."
+  [id]
+  (when-let [account (get-source "account" id)]
+    (account-map->Account account)))
 
-(defn update-account [account key value]
-  (let [attr (keyword "account" (name key))]
-    @(d/transact (connect)
-                 (if (nil? value)
-                     [[:db/retract [:account/id (:id account)] attr (key account)]]
-                     [{:db/id [:account/id (:id account)]
-                       attr   value}]))))
+(defn get-accounts-for-user [user-id]
+  (let [response (esd/search (get-conn) index "account"
+                             :query (q/term :user-id user-id))]
+    (map (comp account-map->Account :_source)
+         (hits-from response))))
 
-(defn delete-account [account]
-  ; TODO: check that something was actually retracted, and if not either return an error value or raise an exception
-  ; TODO: it might be better to just mark the account as logically deleted, rather than actually
-  ; retract it, because retracting it means (AFAIK) the only way to query it or for it to factor
-  ; in to queries is to “travel back in time” (in the Datomic sense) which is super-cool but also
-  ; maybe a bit awkward and unweildy — especially if one doesn’t know *when* to travel back in
-  ; time *to*.
-  @(d/transact (connect)
-               [[:db.fn/retractEntity [:account/id (:id account)]]]))
+(defn ^:private update-failed?
+  "Accepts a response from ElasticSearch as a map, returns a boolean."
+  [response]
+  (pos? (-> response :_shards :failed)))
+
+(defn update-account
+  "Given an id, key, and value, updates an Account. Returns nil on success, throws an exception on
+   failure."
+  [id key value]
+  (let [response (esd/update-with-partial-doc (get-conn) index "account" id {key value})]
+    (when (update-failed? response)
+          (throw (ex-info (str response) response)))))
+
+(defn delete-account [id]
+  ; TODO: it might be better to just mark the account as logically deleted, rather than actually delete it.
+  (let [response (esd/delete (get-conn) index "account" id)]
+    (when-not (found? response)
+      (throw (ex-info (str "Could not find account with id " id " to delete it.") response)))))
 
 (defn get-service [slug]
-  (when-let [e (pull-entity (d/db (connect)) :service/slug slug)]
-    (map->Service e)))
+  ; Yes, we’re using service slugs as ElasticSearch IDs.
+  (when-let [result (get-source "service" slug)]
+    (map->Service result)))
 
-(defn get-user [{:keys [email account-id]
-                 :or   {email "", account-id ""}
-                 :as   criteria}]
-  (let [db (d/db (connect))
-        email-result (d/q '[:find ?user
-                            :in $ ?email
-                            :where [?user :user/email ?email]]
-                          db email)
-        account-result (d/q '[:find ?user
-                              :in $ ?account-id
-                              :where [?account :account/user ?user]
-                              [?account :account/id ?account-id]]
-                            db account-id)
-        result (or (seq email-result)
-                   (seq account-result))]
-    (when result
-          (->> (ffirst result)
-               (entity-id->map db)))))
+(defn ^:private get-user-by-email [email]
+  (let [response (esd/search (get-conn)
+                             index
+                             "user"
+                             :query (q/term :email email))]
+    (if (<= (total-hits response) 1)
+        (-> response hits-from first :_source)
+        (throw (ex-info (str "More than 1 user found with the email address " email) {})))))
 
-(defn create-user [{:keys [name email]}]
+(defn ^:private get-user-by-account-id [account-id]
+  "We have an account ID but need the user associated with the account. We can look up the user ID
+   in the account entity and then retrieve the user by that ID.
+   TODO: look into doing this with a single request, some kind of a “join” or indirect query."
+  (when-let [account (get-source "account" account-id)]
+    (get-source "user" (:user-id account))))
+
+(defn get-user
+  "Attempts to retrieve a user via a supplied email address and/or account-id. If no matching user
+   is found, returns nil.
+   TODO: enforce that at least one criterion must be supplied
+   TODO: actually implement the “and” part of the above description, or change the description.
+   TODO: maybe simplify this; maybe remove the “and” and make the args simpler somehow.
+   TODO: or maybe just 2 funcs: get-user-by-email and get-user-for-account"
+  [{:keys [email account-id]
+    :as   criteria}]
+  (or (when email
+            (get-user-by-email email))
+      (when account-id
+            (get-user-by-account-id account-id))))
+
+(defn ^:private user-valid? [user]
+  (and (every? #(-> user % blank? not) [:name :email])
+       (includes? (:email user) "@")))
+
+(defn create-user
+  "Creates the supplied account in the database, assigning it a unique id in the key :id. Returns
+   the “updated” user with the new :id."
+  [user]
+  {:pre [(user-valid? user)]}
   ;; TODO: prevent creation of duplicate users
-  (let [id (d/squuid)
-        tx-result @(d/transact (connect)
-                               [{:db/id      (d/tempid :db.part/user)
-                                 :user/id    id
-                                 :user/email email
-                                 :user/name  name}])
-        db-after (:db-after tx-result)]
-    (pull-entity db-after :user/id id)))
+  (let [id (new-id)
+        user (assoc user :id id)]
+    (create-entity "user" user id)
+    user))
+
+(defn ^:private get-one-account-for-service [service-slug]
+  (as-> (esd/search (get-conn)
+                    index
+                    "account"
+                    :query (q/term :service-slug service-slug)
+                    :size 1) it
+        (hits-from it)
+        (first it)
+        (when it
+              (-> it :_source account-map->Account))))
 
 (defn get-one-account-per-active-service []
   "For syncing. We need to sync accounts because we need active tokens to do so, and those are
    at the account level. But we only want to sync one account per service; so we don’t do redundant
-   work."
-  (let [db (d/db (connect))
-        service-results (d/q '[:find [?service ...]
-                               :where [?service :service/client-id]] db)
-        account-results (mapcat #(d/q '[:find [?account]
-                                        :in $ ?service
-                                        :where [?account :account/service ?service]]
-                                      db %)
-                                service-results)]
-    (map #(->> (d/entity db %)
-               account-entity->map
-               map->Account)
-         account-results)))
+   work"
+  ;; TODO: this makes multiple successive requests to ES, so it’s quite inefficient. FIX THIS.
+  ;; TODO: implement the “active” part -- right now this assumes that if a service exists in the DB, it’s active.
+  (let [services (hits-from
+                   (esd/search (get-conn)
+                               index
+                               "service"
+                               :query (q/match-all)))]
+    (->> (map (comp get-one-account-for-service :slug :_source) services)
+         (remove nil?))))

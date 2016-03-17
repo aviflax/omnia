@@ -75,7 +75,7 @@
   ; return nil so other components don’t come to rely on the specific results of ElasticSearch
   nil)
 
-(defn delete-all-docs-for-account [account]
+(defn delete-all-docs-for-account [account-id]
   ;; TODO: This should really use esd/delete-by-query but I was having trouble with it. I suspect
   ;; this might be due to the version incompatibility between the current version of Elastisch and
   ;; ElasticSearch I’m using. TBD.
@@ -83,7 +83,7 @@
         ids (->> (esd/search conn
                              "omnia"
                              "document"
-                             :query (q/term :omnia-account-id (:id account))
+                             :query (q/term :omnia-account-id account-id)
                              :scroll "1m"
                              :_source false)
                  (esd/scroll-seq conn)

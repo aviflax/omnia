@@ -42,7 +42,7 @@
     (if (= (:status response) 401)
         (let [token (get-new-access-token account)]
           (println "got new access token" token " so updating account in DB")
-          (db/update-account account :access-token token)
+          (db/update-account (:id account) :access-token token)
           (println "trying again with new access token" token)
           (goget url (assoc account :access-token token) opts))
         response)))
@@ -143,15 +143,15 @@
       ; get more
       (if-let [next-cursor (next-cursor-from-changes changes)]
         (do
-          (db/update-account account :sync-cursor (str next-cursor))
+          (db/update-account (:id account) :sync-cursor (str next-cursor))
           (Thread/sleep 10)
           (recur next-cursor))
-        (db/update-account account :sync-cursor (-> changes :largestChangeId bigint int inc str)))))
+        (db/update-account (:id account) :sync-cursor (-> changes :largestChangeId bigint int inc str)))))
   nil)
 
 (defn ^:private get-user [access-token]
   (as-> (goget "https://www.googleapis.com/plus/v1/people/me"
-               {:access-token access-token} ; TODO: HACK
+               {:access-token access-token}                 ; TODO: HACK
                {:as :json}) it
         (:body it)
         {:id    (:id it)
