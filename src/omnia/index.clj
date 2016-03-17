@@ -94,7 +94,7 @@
   nil)
 
 (defn add-or-update [doc]
-  (println "Indexing" (dissoc doc :text))
+  (println "Indexing" (:name doc) ":" (dissoc doc :text))
   (esd/put (connect) "omnia" "document" (:omnia-id doc) doc)
   ; return nil so other components don’t come to rely on the specific results of ElasticSearch
   nil)
