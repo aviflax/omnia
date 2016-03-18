@@ -171,10 +171,15 @@
               [:h2 "Here’s the deal:"]
               [:ul (case (:slug service)
                      "box"
-                     [:li "help text coming soon!"]
+                     (seq [[:li "If you choose to continue, we’ll direct you to Box, who will ask you whether
+                                 you’d like to give us permission to access your documents."]
+
+                           [:li "Box doesn’t offer a way for us to request read-only access, so if you want us to index
+                                 your documents, we’ll need full access to your Box account — but we promise that we will
+                                 only ever <i>read</i> your Box data, never write to it."]])
 
                      "dropbox"
-                     (seq [[:li "If you choose to continue, we’ll direct you to " service-name ", who will ask you whether
+                     (seq [[:li "If you choose to continue, we’ll direct you to Dropbox, who will ask you whether
                                  you’d like to give us permission to access your documents."]
 
                            [:li "Dropbox doesn’t offer a way for us to request read-only access, so if you want us to index
@@ -185,7 +190,7 @@
                                  your entire team/organization."]])
 
                      "google-drive"
-                     (seq [[:li "If you choose to continue, we’ll direct you to " service-name ", who will ask you whether
+                     (seq [[:li "If you choose to continue, we’ll direct you to Google Drive, who will ask you whether
                                  you’d like to give us permission to <b>read</b> your documents."]
 
                            [:li "We’ll only read the documents in your Google Drive that are shared with your entire
@@ -279,6 +284,7 @@
           (header "Log in")
           [:section
            [:h1 "With which service would you like to log in?"]
+           ;; TODO: replace hard-coded list with dynamic list retrieved from database
            [:p [:a {:href "/login/with/dropbox/start"} "Dropbox"]]
            [:p [:a {:href "/login/with/google-drive/start"} "Google Drive"]]
            [:p "Please choose a service and we’ll explain more about how this works."]

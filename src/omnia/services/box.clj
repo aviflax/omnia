@@ -1,7 +1,17 @@
 (ns omnia.services.box
   "Uses the Box Java SDK for initial sync, but straight HTTP to Box’s API for incremental sync,
    because the Java SDK doesn’t support regular polling for events — only long-polling, which
-   doesn’t fit our current needs."
+   doesn’t fit our current needs.
+
+   Note that there’s a cache for recently-processed-events due to this from the Box API docs:
+
+   > Due to timing lag across our multiple datacenters, and our preference of low-latency and
+   > insurance to make sure you don’t miss some event, you may receive duplicate events when you
+   > call the /events API. You should use the event_id field in each returned event to check for
+   > duplicate events and discard ones that you have already processed.
+
+   https://box-content.readme.io/reference#events
+   "
   (:require [clojure.core.async :refer [chan dropping-buffer go <! >!!]]
             [clojure.core.cache :as cache]
             [omnia
