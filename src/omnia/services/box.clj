@@ -21,7 +21,7 @@
            [java.io ByteArrayOutputStream]
            [clojure.lang ExceptionInfo]))
 
-(def ^:private recently-processed-events (cache/fifo-cache-factory {}))
+(def ^:private recently-processed-events (atom (cache/fifo-cache-factory {})))
 
 (def ^:private auth "TODO: maybe this should just be in the database"
   {:type   :oauth2
@@ -48,14 +48,14 @@
 
 (defn ^:private get-path [file-info] "COMING SOON!")
 
-(defn ^:private omnia-id-for-file [file-info]
-  (str "box/" (.getID file-info)))
+(defn ^:private omnia-id-for-file [file-id]
+  (str "box/" file-id))
 
 (defn ^:private file->doc [file-info account]
   {:id                 (.getID file-info)
    :name               (.getName file-info)
    :path               (get-path file-info)
-   :omnia-id           (omnia-id-for-file file-info)
+   :omnia-id           (omnia-id-for-file (.getID file-info))
    :omnia-account-id   (:id account)
    :omnia-service-name (-> account :service :display-name)})
 
@@ -125,17 +125,19 @@
 (def ^:private event-types-to-process #{"ITEM_CREATE" "ITEM_UPLOAD"
                                         "ITEM_TRASH" "ITEM_UNDELETE_VIA_TRASH"})
 
-(defn un-index-file [file-info account]
-  (info "Box: un-indexing file" file-info)
+(defn un-index-file [file-id account]
+  (info "un-indexing file" file-id)
   (index/delete {:omnia-account-id (:id account)
-                 :omnia-id         (omnia-id-for-file file-info)}))
+                 :omnia-id         (omnia-id-for-file file-id)}))
 
 (defn ^:private recently-processed? [event]
   (let [id (:event_id event)]
-    (if (cache/has? recently-processed-events id)
-        (do (cache/hit recently-processed-events id)
+    (if (cache/has? @recently-processed-events id)
+        (do (swap! recently-processed-events cache/hit id)
+            (println "TMP: skipping event because it was already recently processed")
             true)
-        (do (cache/miss recently-processed-events id event)
+        (do (swap! recently-processed-events cache/miss id event)
+            (println "TMP: NOT skipping event because it was NOT recently processed")
             false))))
 
 (defn ^:private process-events [events account]
@@ -150,12 +152,10 @@
         (let [conn (BoxAPIConnection. (:access-token account))]
           (doseq [event events]
             (try
-              (let [file (BoxFile. conn (-> event :source :id))
-                    _ (info "Attempting to retrieve info for Box file: " (:source event))
-                    file-info (.getInfo file)]
+              (let [file (BoxFile. conn (-> event :source :id))]
                 (if (= (:event_type event) "ITEM_TRASH")
-                    (un-index-file file-info account)
-                    (index-file file-info account)))
+                    (un-index-file (.getID file) account)
+                    (index-file (.getInfo file) account)))
               (catch BoxAPIException e
                 ; 404 or 410 means the file was subsequently deleted, so we can just skip it
                 (when-not (#{404 410} (.getResponseCode e))
@@ -209,7 +209,9 @@
   (go
     (loop []
       (when-some [account (<! sync-chan)]
-        (synchronize! account)
+        (try
+          (synchronize! account)
+          (catch Exception e (error e)))
         (recur)))))
 
 (defrecord Account [id user service access-token sync-cursor]
