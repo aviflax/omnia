@@ -97,17 +97,14 @@
                 [:p#total (when (> total 20) "About ")
                  total " result" (when (not= total 1) "s")]
                 [:section#results
-                 (for [hit (:hits result)
-                       :let [path (:path hit)
-                             path-segments (when path (split path #"/"))
-                             path (join "/" (butlast path-segments))]]
+                 (for [hit (:hits result)]
                    [:section.result
                     [:h1
                      [:a {:href (link hit)}
                       (:name hit)]]
                     [:label.source (-> hit :omnia-service-name capitalize-each-word)]
-                    (when-not (blank? path) ": ")
-                    [:label.path path]
+                    (when-not (blank? (:path hit))
+                      (seq [": " [:label.path (:path hit)]]))
                     [:p.highlight (:highlight hit) "…"]])]
                 (pagination-links query total page-num per-page)
                 footer]))))

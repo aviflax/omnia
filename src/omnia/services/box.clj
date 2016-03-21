@@ -14,6 +14,7 @@
    "
   (:require [clojure.core.async :refer [chan dropping-buffer go <! >!!]]
             [clojure.core.cache :as cache]
+            [clojure.string :refer [join]]
             [omnia
              [db :as db]
              [index :as index]
@@ -56,7 +57,11 @@
 
 (defn ^:private should-index? [file-info] true)
 
-(defn ^:private get-path [file-info] "COMING SOON!")
+(defn ^:private build-path [file-info]
+  (->> (.getPathCollection file-info)
+       next
+       (map #(.getName %))
+       (join "/")))
 
 (defn ^:private omnia-id-for-file [file-id]
   (str "box/" file-id))
@@ -64,7 +69,7 @@
 (defn ^:private file->doc [file-info account]
   {:id                 (.getID file-info)
    :name               (.getName file-info)
-   :path               (get-path file-info)
+   :path               (build-path file-info)
    :omnia-id           (omnia-id-for-file (.getID file-info))
    :omnia-account-id   (:id account)
    :omnia-service-name (-> account :service :display-name)})
