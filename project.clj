@@ -9,8 +9,15 @@
                  [com.taoensso/timbre "4.3.0"]
                  [org.clojure/core.cache "0.6.4"]
 
+                 ;; Jackson is used by both Dropbox and Cheshire and their specified versions conflict
+                 [com.fasterxml.jackson.core/jackson-core "2.7.3"]
+                 [com.fasterxml.jackson.core/jackson-annotations "2.7.3"]
+                 [com.fasterxml.jackson.core/jackson-databind "2.7.3"]
+                 [com.fasterxml.jackson.dataformat/jackson-dataformat-cbor "2.7.3"]
+                 [com.fasterxml.jackson.dataformat/jackson-dataformat-smile "2.7.3"]
+
                  ; Services
-                 [com.dropbox.core/dropbox-core-sdk "2.0-beta-5" :exclusions [com.fasterxml.jackson.core/jackson-core]]
+                 [com.dropbox.core/dropbox-core-sdk "2.0.1" :exclusions [com.fasterxml.jackson.core/jackson-core]]
                  [com.box/box-java-sdk "2.0.0"]
 
                  ; HTTP client stuff
