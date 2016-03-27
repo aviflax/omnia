@@ -137,6 +137,7 @@
            [:h1 "Which type of Account would you like to connect?"]
            [:p [:a {:href "/accounts/connect/dropbox/start"} "Dropbox"]]
            [:p [:a {:href "/accounts/connect/google-drive/start"} "Google Drive"]]
+           [:p "Please choose a service and we’ll explain more about how this works."]
            [:p "Do you need to connect a service not shown here? Let us know! {LINK}"]]]))
 
 ; This is harder than it looks.
@@ -275,6 +276,7 @@
            [:h1 "With which service would you like to log in?"]
            [:p [:a {:href "/login/with/dropbox/start"} "Dropbox"]]
            [:p [:a {:href "/login/with/google-drive/start"} "Google Drive"]]
+           [:p "Please choose a service and we’ll explain more about how this works."]
            [:p "Is there some other service not shown here you’d like to use to log in? Let us know! {LINK}"]]]))
 
 (defn ^:private login-start-get [service-slug]
