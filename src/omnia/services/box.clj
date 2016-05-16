@@ -104,7 +104,7 @@
    returns the account with the new access token."
   (let [token (get-new-access-token account)]
     (println "got new access token" token "; updating account in DB")
-    (db/update-account account :access-token token)
+    (db/update-account (:id account) :access-token token)
     (assoc account :access-token token)))
 
 (defn ^:private goget
@@ -186,8 +186,8 @@
       (debug "next-stream-position" next-stream-position "events" events)
       (process-events events account)
       (when next-stream-position
-            (do (info "Setting Box sync-cursor to " next-stream-position)
-                (db/update-account account :sync-cursor (str next-stream-position))))
+            (info "Setting Box sync-cursor to " next-stream-position)
+            (db/update-account (:id account) :sync-cursor (str next-stream-position)))
       (when (seq events)
             (recur next-stream-position account)))))
 
@@ -210,7 +210,7 @@
                 "0"
                 account)
   (->> (get-latest-event-stream-position account)
-       (db/update-account account :sync-cursor)))
+       (db/update-account (:id account) :sync-cursor)))
 
 (defn ^:private synchronize! [account]
   ;; TODO: some way to resume an interrupted initial index task
