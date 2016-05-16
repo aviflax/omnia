@@ -1,4 +1,83 @@
 (ns omnia.web
+  "One thing that’s confusing here is that we have two user flows that are discrete yet very similar
+   and overlapping: logging in and connecting an account.
+
+   Logging in means a user is not logged in -- we don’t know who they are, so we don’t let them do
+   anything -- the only thing they can do from that state is log in.
+
+   Since we don’t know who the user is, we don’t know whether we already know them or not, and of
+   course we don’t know whether they have previous connected any of their accounts or not. So once
+   they choose a service to login with and authenticate with that service, we will check at that
+   point whether the account they’ve used to login is already connected or not. If not, then we
+   “connect” it right then and there, on the fly. This is no big deal because really connecting is
+   mainly about authenticating with a service, and us saving the result (the token(s)) -- and that
+   is part of the login process as well. See what I mean about this being confusing. So really the
+   end-result of logging in can be that a user simply logged in with an account they had previously
+   connected, in which case I don’t think we save anything to the DB, _or_ they may have logged in
+   with an account they had not previously connected, in which case logging in automatically
+   connects the account as well, which really just means we save an account record to the database
+   for that user and that service, with the returned token(s).
+
+   At first, during the early prototype stage, the app didn’t have sessions nor the concept of being
+   logged in or logged out. So the only thing you could do WRT service accounts is connect them or
+   disconnect them. So we had a connect flow. Then I added the ability to log in and log out, and
+   I added it as a discrete flow because it had different URLs (the URLs being a useful way to
+   maintain context during the flow), slightly different copy, and slightly different behavior.
+
+   (An example of that slightly different behavior is that when connecting an account,
+   hypothetically we already know that you are connecting a _new_ account that had not previously
+   been connected, because why else would you be attempting to connect an account? So when you
+   completed authenticating with the service and were redirected back to us, we could just assume
+   (perhaps naively) that the account record didn’t exist on our side, and just create a new one.
+   When a user is redirected back to us as part of the _login_ flow, however, we definitely do not
+   know at that point whether or not this is a service account that had already previously been
+   connected, so we need to check and possibly create that record on the fly at that point.)
+
+   This situation, with the separate flows, was all well and good until I added support for Box.
+   Unlike Dropbox and Google Drive, Box’s settings for third-party apps support only a single
+   “redirect URL”. To elaborate: these services want you to give them a “whitelist” of redirect
+   URLs that you “register” with them -- these “app” things after all are really just a set of data
+   for allowing third parties to use their API and access customer data. While Dropbox and Google
+   Drive conveniently support an actual list -- multiple URLs -- Box supports only a single scalar
+   value -- a single URL. So if I attempt to ask Box to redirect the user back to a different URL
+   as part of the authentication process, it just fails and displays an error message.
+
+   So I need to figure out how to deal with this.
+
+   My current plan is that I have to just surrender the option to have multiple URL paths, and
+   collapse both paths into a single URL flow and find some other way to distinguish the actual
+   flow -- maybe with cookies or maybe with URL parameters.
+
+   But it occured to me just now that perhaps instead of collapsing both URL flows together I can
+   collapse _only_ the redirect point -- have the branches converge at that point but then
+   immediately diverge again.
+
+   I think I’m gonna need to chart this out.
+
+   Wait a sec... [this SO answer](http://stackoverflow.com/a/30339185/7012) cites the [Box OAuth
+   tutorial](https://developers.box.com/oauth/):
+
+   > Wildcard redirect_uri values are also accepted in the request as long as the base url matches
+   > the URI registered in the application console. A registered redirect_uri of
+   > `https://www.myboxapp.com` can be dynamically redirected to `https://www.myboxapp.com/user1234`
+   > if passed into the request `redirect_uri` parameter.
+
+   Aha! That might be just the ticket! Perhaps I can change the value of the `redirect_uri` setting
+   of my “app” to make it less specific! Perhaps all they really care about is the host... maybe I
+   could change it from its current value of `http://localhost:3000/accounts/connect/box/finish`
+   to just `http://localhost:3000/` ... and maybe then any `redirect_uri` value sent live would be
+   accepted as long as it started with that... in which case I wouldn’t need _any_ code changes!
+   That would be excellent.
+
+   If it turns out that Box requires at least one path segment (for whatever reason) then I could
+   just contrive some common “root” path segment to “root” both the login and connect flows in...
+   perhaps `/auth/` would make sense. Seems not too bad.
+
+   Well shit, it worked.
+
+   That wasn’t so bad!
+   "
+
   (:require [ring.adapter.jetty :refer [run-jetty]]
             [compojure.core :refer [defroutes routes GET POST DELETE]]
             [ring.middleware.params :refer [wrap-params]]
@@ -281,10 +360,14 @@
           (header "Log in")
           [:section
            [:h1 "With which service would you like to log in?"]
-           ;; TODO: replace hard-coded list with dynamic list retrieved from database
-           [:p [:a {:href "/login/with/dropbox/start"} "Dropbox"]]
-           [:p [:a {:href "/login/with/google-drive/start"} "Google Drive"]]
            [:p "Please choose a service and we’ll explain more about how this works."]
+           ;; TODO: replace hard-coded list with dynamic list retrieved from database
+           (for [[slug name] [["box" "Box"]
+                              ["dropbox" "Dropbox"]
+                              ["google-drive" "Google Drive"]]]
+             [:p [:a {:href (str "/login/with/" slug "/start")} name]])
+           [:p "If you’re not sure which service you’ve used to log in before, don’t worry about
+                it! You can get in with any of your accounts, and we’ll sort it out on the back end."]
            [:p "Is there some other service not shown here you’d like to use to log in? Let us know! {LINK}"]]]))
 
 (defn ^:private login-start-get [service-slug]
@@ -310,6 +393,9 @@
                                  your entire team/organization."]])
 
                      "google-drive"
+                     [:li "TODO: add explanatory text here!"]
+
+                     "box"
                      [:li "TODO: add explanatory text here!"]
 
                      "Something went wrong here!")]
