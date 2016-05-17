@@ -40,6 +40,30 @@
    * looking for the deletion or un-sharing of folders and removing them from the set
 
    BUT we might not get around to those features for awhile.
+
+   ## Syncing
+
+   Given all that, how should syncing work?
+
+   How about:
+
+   ### Initial Sync
+
+   1. Retrieve the list of folders in the root that are shared with the entire company and save
+      it to the DB
+   2. Recursively iterate through the contents of each folder and index every file that meets
+      our criteria
+   3. Get the latest event stream position for the account and save it to the account in the DB
+
+   ### Incremental Sync
+
+   1. Update the list of folders in the root that are shared with the entire company
+       1. Later, as an optimization, only do this for every N syncs
+   2. (Later) Check the list for _removed_ folders; if any are removed then re-index the entire
+      account (remove all docs from index and kick off an initial index).
+   3. Retrieve new events and process them:
+       1. If the subject of the event is rooted in one of the root shared folders, then index it
+       2. Incrementally update the event stream position of the account in the DB
    "
   (:require [clojure.core.async :refer [chan dropping-buffer go <! >!!]]
             [clojure.core.cache :as cache]
@@ -55,7 +79,8 @@
             [clj-http.client :as client]
             [taoensso.timbre :as log])
   (:import [com.box.sdk BoxAPIConnection BoxUser BoxFolder BoxFile$Info BoxFolder$Info BoxFile BoxAPIException BoxSharedLink$Access]
-           [clojure.lang ExceptionInfo]))
+           [clojure.lang ExceptionInfo]
+           [java.io ByteArrayOutputStream]))
 
 (def ^:private recently-processed-events (atom (cache/fifo-cache-factory {})))
 
@@ -81,12 +106,21 @@
   (get-user-account [_ access-token] (get-user access-token)))
 
 (defn ^:private should-index? [file-info]
-  true
-  ; the below is wrong — rather than checking that a file itself has a shared link with the required
-  ; access level, we should check whether a file is rooted in a root-level dir that has such a link.
-  ;(= (-> file-info .getSharedLink .getAccess)
-  ;   BoxSharedLink$Access/COMPANY)
-  )
+  ; I don’t have any criteria to enforce right now but I want to preserve this logical step because there’s a good chance
+  ; we will have such criteria soon, and it’s also consistent with our other service implementations.
+  true)
+
+(defn ^:private get-root-shared-folders [conn]
+  (let [root-dir (BoxFolder. conn "0")
+        fields-needed ["name" "shared_link"]]
+    (->> (.getChildren root-dir (into-array fields-needed))
+         ; TODO? maybe this is inefficient? maybe use transducers?
+         (filter #(= (type %) BoxFolder$Info))
+         (filter #(.getSharedLink %))
+         (filter #(= (-> % .getSharedLink .getAccess)
+                     BoxSharedLink$Access/COMPANY))
+         (map #(hash-map :id (.getID %)
+                         :name (.getName %))))))
 
 (defn ^:private build-path [file-info]
   (->> (.getPathCollection file-info)
@@ -115,9 +149,9 @@
   (as-> (file->doc file-info account) doc
         (assoc doc :text
                    (when (can-parse? (mime-type-of (.getName file-info)))
-                         (-> (get-file-content file-info)
-                             parse
-                             :text)))
+                     (-> (get-file-content file-info)
+                         parse
+                         :text)))
         (index/add-or-update doc)))
 
 (defn ^:private get-new-access-token
@@ -176,6 +210,11 @@
   (index/delete {:omnia-account-id (:id account)
                  :omnia-id         (omnia-id-for-file file-id)}))
 
+(defn file-rooted-in-shared-root-folder? [shared-root-folders file]
+  (some #(= (:id %)
+            (-> file .getInfo .getPathCollection second .getID))
+        shared-root-folders))
+
 (defn ^:private recently-processed? [event]
   (let [id (:event_id event)]
     (if (cache/has? @recently-processed-events id)
@@ -186,7 +225,7 @@
             (println "TMP: NOT skipping event because it was NOT recently processed")
             false))))
 
-(defn ^:private process-events [events account]
+(defn ^:private process-events [events conn account]
   ;; TODO: deal with this from the docs:
   ;; "Events will occasionally arrive out of order. For example a file-upload might show up before
   ;; the Folder-create event. You may need to buffer events and apply them in a logical order."
@@ -195,39 +234,50 @@
   (as-> (filter #(event-types-to-process (:event_type %)) events) events
         (filter #(= (-> % :source :type) "file") events)
         (remove recently-processed? events)
-        (let [conn (BoxAPIConnection. (:access-token account))]
-          (doseq [event events]
-            (try
-              (let [file (BoxFile. conn (-> event :source :id))]
-                (if (= (:event_type event) "ITEM_TRASH")
-                    (un-index-file (.getID file) account)
+        (doseq [event events
+                :let [source-id (-> event :source :id)]]
+          (if (= (:event_type event) "ITEM_TRASH")
+              (un-index-file source-id account)
+              (try
+                (let [file (BoxFile. conn source-id)]
+                  (when (file-rooted-in-shared-root-folder? (:shared-root-folders account) file)
                     (index-file (.getInfo file) account)))
-              (catch BoxAPIException e
-                ; 404 or 410 means the file was subsequently deleted, so we can just skip it
-                (when-not (#{404 410} (.getResponseCode e))
-                  (throw e))))))))
+                  (catch BoxAPIException e
+                    ; 404 or 410 means the file was subsequently deleted, so we can just skip it -- or, wait, does
+                    ; that make sense? maybe in this case we _really_ need to un-index the file? TODO!
+                    (when-not (#{404 410} (.getResponseCode e))
+                      (throw e))))))))
 
 (defn ^:private incremental-sync [account]
-  (loop [; What our domain model calls a sync-cursor, Box’s API calls the stream position.
-         stream-position (:sync-cursor account)
-         account account]
-    (let [{:keys [account response]} (get-events-resource account stream-position)
-          {events               :entries
-           next-stream-position :next_stream_position} (:body response)]
-      (log/debug "next-stream-position" next-stream-position "events" events)
-      (process-events events account)
-      (when next-stream-position
-            (log/info "Setting Box sync-cursor to " next-stream-position)
-            (db/update-account (:id account) :sync-cursor (str next-stream-position)))
-      (when (seq events)
-            (recur next-stream-position account)))))
+  (let [conn (BoxAPIConnection. (:access-token account))
+        root-shared-folders (get-root-shared-folders conn)
+        _ (db/update-account (:id account) :root-shared-folders root-shared-folders)
+
+        ; ensure that in the rest of this fn we’re using the current list of folders
+        account (assoc account :root-shared-folders root-shared-folders)]
+    (loop [; What our domain model calls a sync-cursor, Box’s API calls the stream position.
+           stream-position (:sync-cursor account)
+           account account]
+      (let [{:keys [account response]} (get-events-resource account stream-position)
+            {events               :entries
+             next-stream-position :next_stream_position} (:body response)]
+        (log/debug "next-stream-position" next-stream-position "events" events)
+
+        (process-events events conn account)
+
+        (when next-stream-position
+          (log/info "Setting Box sync-cursor to " next-stream-position)
+          (db/update-account (:id account) :sync-cursor (str next-stream-position)))
+
+        (when (seq events)
+          (recur next-stream-position account))))))
 
 (defn ^:private index-folder [conn folder-id account]
   (doseq [item-info (BoxFolder. conn folder-id)]
     (condp #(= (type %2) %1) item-info
       BoxFile$Info
       (when (should-index? item-info)
-            (index-file item-info account))
+        (index-file item-info account))
 
       BoxFolder$Info
       ;; TODO: this recursive call is a bad idea. convert to loop/recur!
@@ -237,11 +287,13 @@
 
 (defn ^:private initial-index [account]
   (log/infof "Starting initial index of account %s" account)
-  (index-folder (BoxAPIConnection. (:access-token account))
-                "0"
-                account)
-  (->> (get-latest-event-stream-position account)
-       (db/update-account (:id account) :sync-cursor)))
+  (let [conn (BoxAPIConnection. (:access-token account))
+        root-shared-folders (get-root-shared-folders conn)]
+    (db/update-account (:id account) :root-shared-folders root-shared-folders)
+    (run! #(index-folder conn (:id %) account)
+          root-shared-folders)
+    (->> (get-latest-event-stream-position account)
+         (db/update-account (:id account) :sync-cursor))))
 
 (defn ^:private synchronize! [account]
   ;; TODO: some way to resume an interrupted initial index task
