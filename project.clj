@@ -18,7 +18,7 @@
 
                  ; Services
                  [com.dropbox.core/dropbox-core-sdk "2.0.1" :exclusions [com.fasterxml.jackson.core/jackson-core]]
-                 [com.box/box-java-sdk "2.0.0"]
+                 [com.box/box-java-sdk "2.1.1"]
 
                  ; HTTP client stuff
                  [clj-http "2.0.1"]
