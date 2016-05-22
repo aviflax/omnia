@@ -111,8 +111,8 @@
   ([& title-segments]
    [:header [:h1 [:a {:href "/"} "Omnia"]
              (when (some some? title-segments)
-                   (str " » "
-                        (apply str title-segments)))]]))
+               (str " » "
+                    (apply str title-segments)))]]))
 
 (def ^:private footer
   [:footer
@@ -145,16 +145,16 @@
 
 (defn ^:private pagination-links [query total current-page per-page]
   (when (> total per-page)
-        (let [num-pages (-> (/ total per-page) Math/ceil int)]
-          [:ol#pagination
-           (for [page-num (range 1 (inc num-pages))]
-             [:li
-              (if (= page-num current-page)
-                  current-page
-                  [:a {:href (str "/search?q=" query
-                                  "&page=" page-num
-                                  "&per-page=" per-page)}
-                   page-num])])])))
+    (let [num-pages (-> (/ total per-page) Math/ceil int)]
+      [:ol#pagination
+       (for [page-num (range 1 (inc num-pages))]
+         [:li
+          (if (= page-num current-page)
+              current-page
+              [:a {:href (str "/search?q=" query
+                              "&page=" page-num
+                              "&per-page=" per-page)}
+               page-num])])])))
 
 (defn ^:private search-get [query page-num per-page]
   (if (blank? (trim query))

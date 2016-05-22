@@ -242,11 +242,11 @@
                 (let [file (BoxFile. conn source-id)]
                   (when (file-rooted-in-shared-root-folder? (:shared-root-folders account) file)
                     (index-file (.getInfo file) account)))
-                  (catch BoxAPIException e
-                    ; 404 or 410 means the file was subsequently deleted, so we can just skip it -- or, wait, does
-                    ; that make sense? maybe in this case we _really_ need to un-index the file? TODO!
-                    (when-not (#{404 410} (.getResponseCode e))
-                      (throw e))))))))
+                (catch BoxAPIException e
+                  ; 404 or 410 means the file was subsequently deleted, so we can just skip it -- or, wait, does
+                  ; that make sense? maybe in this case we _really_ need to un-index the file? TODO!
+                  (when-not (#{404 410} (.getResponseCode e))
+                    (throw e))))))))
 
 (defn ^:private incremental-sync [account]
   (let [conn (BoxAPIConnection. (:access-token account))

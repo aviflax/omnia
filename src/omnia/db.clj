@@ -169,7 +169,7 @@
   [id key value]
   (let [response (esd/update-with-partial-doc (get-conn) index "account" id {key value})]
     (when (update-failed? response)
-          (throw (ex-info (str response) response)))))
+      (throw (ex-info (str response) response)))))
 
 (defn delete-account [id]
   ; TODO: it might be better to just mark the account as logically deleted, rather than actually delete it.
@@ -209,9 +209,9 @@
   [{:keys [email account-id]
     :as   criteria}]
   (or (when email
-            (get-user-by-email email))
+        (get-user-by-email email))
       (when account-id
-            (get-user-by-account-id account-id))))
+        (get-user-by-account-id account-id))))
 
 (defn ^:private user-valid? [user]
   (and (every? #(-> user % blank? not) [:name :email])
@@ -237,7 +237,7 @@
         (hits-from it)
         (first it)
         (when it
-              (-> it :_source account-map->Account))))
+          (-> it :_source account-map->Account))))
 
 (defn get-one-account-per-active-service []
   "For syncing. We need to sync accounts because we need active tokens to do so, and those are
