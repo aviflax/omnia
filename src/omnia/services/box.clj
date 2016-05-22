@@ -240,7 +240,7 @@
               (un-index-file source-id account)
               (try
                 (let [file (BoxFile. conn source-id)]
-                  (when (file-rooted-in-shared-root-folder? (:shared-root-folders account) file)
+                  (when (file-rooted-in-shared-root-folder? (:root-shared-folders account) file)
                     (index-file (.getInfo file) account)))
                 (catch BoxAPIException e
                   ; 404 or 410 means the file was subsequently deleted, so we can just skip it -- or, wait, does
