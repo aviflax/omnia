@@ -211,7 +211,7 @@
           (header "<a href=\"/accounts\">Accounts</a> » Connect a New Account")
           [:section
            [:h1 "Which type of Account would you like to connect?"]
-           [:ol
+           [:ul
             [:li [:a {:href "/accounts/connect/box/start"} "Box"]]
             [:li [:a {:href "/accounts/connect/dropbox/start"} "Dropbox"]]
             [:li [:a {:href "/accounts/connect/google-drive/start"} "Google Drive"]]]
