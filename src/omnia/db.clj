@@ -174,8 +174,9 @@
 (defn delete-account [id]
   ; TODO: it might be better to just mark the account as logically deleted, rather than actually delete it.
   (let [response (esd/delete (get-conn) index "account" id)]
-    (when-not (found? response)
-      (throw (ex-info (str "Could not find account with id " id " to delete it.") response)))))
+    (if (found? response)
+        (esi/refresh (get-conn))
+        (throw (ex-info (str "Could not find account with id " id " to delete it.") response)))))
 
 (defn get-service [slug]
   ; Yes, we’re using service slugs as ElasticSearch IDs.
