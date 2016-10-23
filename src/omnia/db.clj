@@ -175,7 +175,10 @@
   ; TODO: it might be better to just mark the account as logically deleted, rather than actually delete it.
   (let [response (esd/delete (get-conn) index "account" id)]
     (if (found? response)
-        (esi/refresh (get-conn))
+        (do ; refresh the index so the change is immediately visible, then return nil.
+            ; TODO: is this refresh a problematic side effect?
+            (esi/refresh (get-conn))
+            nil)
         (throw (ex-info (str "Could not find account with id " id " to delete it.") response)))))
 
 (defn get-service [slug]
