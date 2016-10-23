@@ -154,7 +154,7 @@
 
 (defn get-accounts-for-user [user-id]
   (let [response (esd/search (get-conn) index "account"
-                             :query (q/term :user-id user-id))]
+                             {:query (q/term :user-id user-id)})]
     (map (comp account-map->Account :_source)
          (hits-from response))))
 
@@ -190,7 +190,7 @@
   (let [response (esd/search (get-conn)
                              index
                              "user"
-                             :query (q/term :email email))]
+                             {:query (q/term :email email)})]
     (if (<= (total-hits response) 1)
         (-> response hits-from first :_source)
         (throw (ex-info (str "More than 1 user found with the email address " email) {})))))
@@ -235,8 +235,8 @@
   (as-> (esd/search (get-conn)
                     index
                     "account"
-                    :query (q/term :service-slug service-slug)
-                    :size 1) it
+                    {:query (q/term :service-slug service-slug)
+                     :size 1}) it
         (hits-from it)
         (first it)
         (when it
@@ -252,6 +252,6 @@
                    (esd/search (get-conn)
                                index
                                "service"
-                               :query (q/match-all)))]
+                               {:query (q/match-all)}))]
     (->> (map (comp get-one-account-for-service :slug :_source) services)
          (remove nil?))))
